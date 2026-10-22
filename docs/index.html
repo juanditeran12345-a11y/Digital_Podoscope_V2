@@ -1,0 +1,1063 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Podoscopio digital, análisis de la bóveda plantar</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+:root{
+  --papel:#f3f6f8;
+  --blanco:#ffffff;
+  --tinta:#17262d;
+  --apagado:#5b6f79;
+  --regla:#d4dde2;
+  --azul:#1b5e87;
+  --azul-oscuro:#144a6b;
+  --azul-suave:#e6f0f6;
+  --visor:#0c1317;
+  --cavo:#5b4bb7;   --cavo-suave:#ece9fa;
+  --normal:#2e7d4f; --normal-suave:#e2f3e8;
+  --plano:#b86a12;  --plano-suave:#fbebd6;
+  --error:#a32727;
+}
+*{box-sizing:border-box}
+html{-webkit-text-size-adjust:100%}
+body{
+  margin:0; background:var(--papel); color:var(--tinta);
+  font-family:"IBM Plex Sans","Segoe UI",system-ui,-apple-system,Roboto,Arial,sans-serif;
+  font-size:15px; line-height:1.45;
+  font-variant-numeric:tabular-nums;
+}
+h1,h2,h3,p{margin:0}
+button,input,select,textarea{font:inherit;color:inherit}
+:focus-visible{outline:2px solid var(--azul);outline-offset:2px}
+.oculto{display:none !important}
+
+/* Barra superior */
+.barra{
+  display:flex; align-items:center; justify-content:space-between; gap:16px; flex-wrap:wrap;
+  padding:12px 28px; background:var(--blanco); border-bottom:1px solid var(--regla);
+}
+.marca{display:flex; align-items:center; gap:12px}
+.marca svg{flex:none}
+.marca h1{font-size:18px; font-weight:600; letter-spacing:-0.005em}
+.marca p{font-size:13px; color:var(--apagado)}
+.estados{display:flex; gap:8px; flex-wrap:wrap}
+.estado{
+  display:inline-flex; align-items:center; gap:8px;
+  font-size:13px; padding:5px 12px; border:1px solid var(--regla); border-radius:999px; background:var(--papel);
+}
+.estado i{width:8px; height:8px; border-radius:50%; background:#9aabb3}
+.estado.activo i{background:var(--normal)}
+
+/* Estructura */
+.cuerpo{
+  display:grid; grid-template-columns:minmax(0,1fr) 340px; gap:28px;
+  max-width:1280px; margin:0 auto; padding:24px 28px 56px; align-items:start;
+}
+@media (max-width:1000px){ .cuerpo{grid-template-columns:1fr; padding:16px 16px 40px} .barra{padding:12px 16px} }
+
+/* Visor */
+.pestanas{display:flex; gap:4px; border-bottom:1px solid var(--regla); overflow-x:auto}
+.pestanas button{
+  background:none; border:0; border-bottom:3px solid transparent; padding:10px 14px; margin-bottom:-1px;
+  cursor:pointer; color:var(--apagado); white-space:nowrap; font-weight:500;
+}
+.pestanas button[aria-selected="true"]{color:var(--azul-oscuro); border-bottom-color:var(--azul)}
+.pestanas button:hover{color:var(--tinta)}
+.visor{
+  position:relative; margin-top:14px; background:var(--visor); border-radius:6px; overflow:hidden;
+  aspect-ratio:4/3; width:100%; max-height:80vh;
+}
+.visor video,.visor img,.visor canvas{
+  position:absolute; inset:0; width:100%; height:100%; object-fit:contain; background:var(--visor);
+}
+.vacio{
+  position:absolute; inset:0; display:flex; flex-direction:column; align-items:center; justify-content:center;
+  gap:6px; padding:24px; text-align:center; color:#b9c7ce;
+}
+.vacio strong{color:#fff; font-weight:500; font-size:16px}
+.vacio span{max-width:36ch; font-size:14px}
+.en-vivo{
+  position:absolute; top:12px; left:12px; display:inline-flex; align-items:center; gap:7px;
+  font-size:12px; font-weight:600; color:#fff; background:rgba(12,19,23,.7); padding:4px 10px; border-radius:999px;
+}
+.en-vivo::before{content:""; width:8px; height:8px; border-radius:50%; background:#e5484d}
+.leyenda{
+  position:absolute; left:14px; right:14px; bottom:12px; display:flex; align-items:center; gap:10px;
+  font-size:12px; color:#e6eef2; background:rgba(12,19,23,.72); padding:7px 12px; border-radius:6px;
+}
+.leyenda .barra-color{
+  flex:1; height:8px; border-radius:4px;
+  background:linear-gradient(90deg,#00007f,#0000ff,#00ffff,#7fff7f,#ffff00,#ff7f00,#ff0000,#7f0000);
+}
+.acciones{display:flex; flex-wrap:wrap; gap:8px; margin-top:14px}
+.btn{
+  border:1px solid var(--regla); background:var(--blanco); border-radius:6px; padding:9px 16px;
+  cursor:pointer; font-weight:500;
+}
+.btn:hover:not(:disabled){border-color:var(--azul); color:var(--azul-oscuro)}
+.btn:disabled{opacity:.45; cursor:not-allowed}
+.btn.primario{background:var(--azul); border-color:var(--azul); color:#fff}
+.btn.primario:hover:not(:disabled){background:var(--azul-oscuro); border-color:var(--azul-oscuro); color:#fff}
+.aviso{min-height:1.4em; margin-top:10px; font-size:14px; color:var(--apagado)}
+.aviso.error{color:var(--error)}
+.aviso.ok{color:var(--normal)}
+
+.camara-sel{display:flex; gap:8px; align-items:center; margin-top:14px; flex-wrap:wrap}
+.camara-sel label{font-size:13px; color:var(--apagado)}
+.camara-sel select{flex:1; min-width:200px; padding:8px 10px; border:1px solid var(--regla); border-radius:4px; background:var(--blanco)}
+.ayuda-camara{margin-top:10px; font-size:14px; color:var(--apagado); max-width:78ch}
+.ayuda-camara summary{cursor:pointer; color:var(--azul-oscuro); font-weight:500}
+.ayuda-camara ol{margin:8px 0 0; padding-left:20px}
+.ayuda-camara li{margin-bottom:3px}
+
+/* Resultados */
+.resultados{margin-top:28px}
+.resultados > h2{font-size:18px; font-weight:600; margin-bottom:4px}
+.resultados .nota{color:var(--apagado); font-size:14px; max-width:70ch}
+.alerta-escala{
+  margin-top:12px; padding:10px 14px; border-left:3px solid var(--plano); background:var(--plano-suave);
+  font-size:14px; max-width:78ch;
+}
+.pies{display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:28px; margin-top:18px}
+@media (max-width:760px){ .pies{grid-template-columns:1fr} }
+.pie{background:var(--blanco); border:1px solid var(--regla); border-radius:6px; padding:18px 20px 20px}
+.pie header{display:flex; align-items:baseline; justify-content:space-between; gap:10px; flex-wrap:wrap}
+.pie h3{font-size:16px; font-weight:600}
+.pie .lado{font-size:13px; color:var(--apagado)}
+.etiqueta{
+  display:inline-block; font-size:13px; font-weight:600; padding:3px 11px; border-radius:999px; margin-top:10px;
+}
+.c-cavo{color:var(--cavo); background:var(--cavo-suave)}
+.c-normal{color:var(--normal); background:var(--normal-suave)}
+.c-plano{color:var(--plano); background:var(--plano-suave)}
+.medidas{margin:14px 0 0; padding:0; border-top:1px solid var(--regla)}
+.medida{display:flex; justify-content:space-between; gap:12px; padding:7px 0; border-bottom:1px solid var(--regla)}
+.medida dt{color:var(--apagado)}
+.medida dd{margin:0; font-weight:600}
+.medida dd span{font-weight:400; color:var(--apagado); margin-left:4px}
+.indice{padding:14px 0 6px; border-bottom:1px solid var(--regla)}
+.indice:last-child{border-bottom:0}
+.indice-cab{display:flex; justify-content:space-between; align-items:baseline; gap:10px}
+.indice-cab h4{margin:0; font-size:14px; font-weight:500}
+.indice-valor{font-size:20px; font-weight:600}
+.indice-valor small{font-size:13px; font-weight:400; color:var(--apagado); margin-left:3px}
+.tira{position:relative; display:flex; height:10px; margin-top:10px; border-radius:5px; overflow:visible}
+.tira i{display:block; height:100%}
+.tira i:first-child{border-radius:5px 0 0 5px}
+.tira i:nth-child(3){border-radius:0 5px 5px 0}
+.s-cavo{background:#cfc8f3}
+.s-normal{background:#bfe3cc}
+.s-plano{background:#f4d3a6}
+.tira b{
+  position:absolute; top:-4px; width:4px; height:18px; margin-left:-2px; border-radius:2px; background:var(--tinta);
+  box-shadow:0 0 0 2px var(--blanco);
+}
+.tira-escala{position:relative; height:18px; margin-top:6px; font-size:12px; color:var(--apagado)}
+.tira-escala span{position:absolute; transform:translateX(-50%)}
+.tira-escala span:first-child{transform:none}
+.tira-escala span:last-child{transform:translateX(-100%)}
+.indice-ref{font-size:12px; color:var(--apagado); margin-top:2px}
+.sin-pie{margin-top:14px; color:var(--apagado)}
+
+/* Lateral */
+.lateral section{background:var(--blanco); border:1px solid var(--regla); border-radius:6px; padding:18px 20px 20px; margin-bottom:16px}
+.lateral h2{font-size:15px; font-weight:600; margin-bottom:12px}
+.campo{display:block; margin-bottom:12px}
+.campo > span{display:block; font-size:13px; color:var(--apagado); margin-bottom:4px}
+.campo input,.campo select,.campo textarea{
+  width:100%; padding:8px 10px; border:1px solid var(--regla); border-radius:4px; background:var(--blanco);
+}
+.campo input:focus,.campo select:focus,.campo textarea:focus{border-color:var(--azul)}
+.campo textarea{resize:vertical; min-height:92px}
+.fila{display:grid; grid-template-columns:1fr 1fr; gap:10px}
+.ayuda{font-size:13px; color:var(--apagado); margin:-6px 0 12px}
+.rango{display:flex; align-items:center; gap:10px}
+.rango input{padding:0}
+.rango output{min-width:2.5ch; text-align:right; font-weight:600}
+.lateral .btn{width:100%}
+
+/* Inicio de sesión */
+body.bloqueado > header.barra, body.bloqueado > main.cuerpo{display:none}
+.login{
+  position:fixed; inset:0; z-index:50; display:none; align-items:center; justify-content:center;
+  padding:20px; background:var(--papel);
+}
+body.bloqueado .login{display:flex}
+.login-caja{
+  width:100%; max-width:380px; background:var(--blanco); border:1px solid var(--regla);
+  border-radius:8px; padding:28px 26px 26px;
+}
+.login-caja .marca{margin-bottom:18px}
+.login-caja h2{font-size:17px; font-weight:600; margin-bottom:4px}
+.login-caja .ayuda{margin:0 0 16px}
+.login-caja .btn{width:100%}
+.usuario-sesion{display:inline-flex; align-items:center; gap:10px; font-size:13px; color:var(--apagado)}
+.usuario-sesion .btn{padding:5px 12px; font-size:13px}
+@media print{ .lateral,.acciones,.pestanas,.barra,.login{display:none} }
+</style>
+</head>
+<body class="bloqueado">
+
+<div class="login" id="login" role="dialog" aria-modal="true" aria-labelledby="loginTitulo">
+  <form class="login-caja" id="formLogin" autocomplete="off" novalidate>
+    <div class="marca">
+      <svg width="34" height="34" viewBox="0 0 34 34" aria-hidden="true">
+        <rect width="34" height="34" rx="8" fill="#1b5e87"/>
+        <path d="M13 12.5c2.2-1.6 5.6-.6 6.6 2.4.9 2.7.2 5.4-.4 8-.5 2.2-2.4 3.7-4.5 3.2-2.3-.5-3-3.2-2.8-5.5.2-2.2-.2-5.4 1.1-8.1z" fill="#fff"/>
+        <circle cx="12.4" cy="8.4" r="1.5" fill="#fff"/><circle cx="16.3" cy="7.2" r="1.4" fill="#fff"/>
+        <circle cx="19.9" cy="8" r="1.3" fill="#fff"/><circle cx="22.6" cy="10" r="1.2" fill="#fff"/>
+      </svg>
+      <div><h1>Podoscopio digital</h1></div>
+    </div>
+    <h2 id="loginTitulo">Iniciar sesión</h2>
+    <p class="ayuda">Ingresa tu número de documento de identidad para acceder.</p>
+    <label class="campo"><span>Número de documento</span>
+      <input id="loginDoc" type="text" inputmode="numeric" autocomplete="off" required>
+    </label>
+    <button class="btn primario" id="btnLogin" type="submit">Ingresar</button>
+    <p class="aviso" id="loginAviso" role="alert"></p>
+  </form>
+</div>
+
+<header class="barra">
+  <div class="marca">
+    <svg width="34" height="34" viewBox="0 0 34 34" aria-hidden="true">
+      <rect width="34" height="34" rx="8" fill="#1b5e87"/>
+      <path d="M13 12.5c2.2-1.6 5.6-.6 6.6 2.4.9 2.7.2 5.4-.4 8-.5 2.2-2.4 3.7-4.5 3.2-2.3-.5-3-3.2-2.8-5.5.2-2.2-.2-5.4 1.1-8.1z" fill="#fff"/>
+      <circle cx="12.4" cy="8.4" r="1.5" fill="#fff"/><circle cx="16.3" cy="7.2" r="1.4" fill="#fff"/>
+      <circle cx="19.9" cy="8" r="1.3" fill="#fff"/><circle cx="22.6" cy="10" r="1.2" fill="#fff"/>
+    </svg>
+    <div>
+      <h1>Podoscopio digital</h1>
+      <p>Análisis de la bóveda plantar</p>
+    </div>
+  </div>
+  <div class="estados">
+    <span class="estado" id="estCamara"><i></i><span>Cámara inactiva</span></span>
+    <span class="estado" id="estAnalisis"><i></i><span>Análisis en el navegador</span></span>
+    <span class="usuario-sesion"><span id="usuarioNombre"></span><button class="btn" id="btnSalir" type="button">Cerrar sesión</button></span>
+  </div>
+</header>
+
+<main class="cuerpo">
+  <div class="principal">
+    <div role="tablist" class="pestanas" aria-label="Vistas de la huella">
+      <button role="tab" id="tab-vivo" data-vista="vivo" aria-selected="true">Cámara en vivo</button>
+      <button role="tab" id="tab-captura" data-vista="captura" aria-selected="false">Imagen capturada</button>
+      <button role="tab" id="tab-seg" data-vista="seg" aria-selected="false">Segmentación</button>
+      <button role="tab" id="tab-med" data-vista="med" aria-selected="false">Medidas</button>
+      <button role="tab" id="tab-mapa" data-vista="mapa" aria-selected="false">Mapa de presión</button>
+    </div>
+
+    <div class="visor" id="visor">
+      <video id="video" playsinline muted class="oculto"></video>
+      <img id="stream" alt="Transmisión de la cámara" class="oculto">
+      <canvas id="lienzo" class="oculto"></canvas>
+      <div class="vacio" id="vacio"><strong id="vacioTitulo"></strong><span id="vacioTexto"></span></div>
+      <span class="en-vivo oculto" id="enVivo">En vivo</span>
+      <div class="leyenda oculto" id="leyenda"><span>Menor contacto</span><div class="barra-color"></div><span>Mayor contacto</span></div>
+    </div>
+
+    <div class="camara-sel">
+      <label for="selCamara">Cámara</label>
+      <select id="selCamara"><option value="">Cámara predeterminada</option></select>
+      <button class="btn" id="btnBuscar" type="button">Actualizar lista</button>
+    </div>
+    <details class="ayuda-camara">
+      <summary>Usar el celular como cámara en Windows 11</summary>
+      <ol>
+        <li>En el celular Android abre la app Link to Windows y vincúlalo con el computador.</li>
+        <li>En Windows entra a Configuración, Bluetooth y dispositivos, Dispositivos móviles, y activa Usar como cámara conectada.</li>
+        <li>Pulsa Actualizar lista y elige el celular en el selector de cámara.</li>
+        <li>Pulsa Iniciar cámara. El indicador de arriba muestra la resolución real que entrega el celular.</li>
+      </ol>
+    </details>
+
+    <div class="acciones">
+      <button class="btn primario" id="btnCamara">Iniciar cámara</button>
+      <button class="btn primario" id="btnCapturar" disabled>Capturar y analizar</button>
+      <button class="btn" id="btnCargar">Cargar imagen</button>
+      <input type="file" id="archivo" accept="image/*" class="oculto">
+    </div>
+    <p class="aviso" id="aviso" role="status"></p>
+
+    <section class="resultados" id="resultados" aria-live="polite"></section>
+  </div>
+
+  <aside class="lateral">
+    <section aria-labelledby="h-paciente">
+      <h2 id="h-paciente">Datos del paciente</h2>
+      <label class="campo"><span>Nombre completo</span><input id="pNombre" type="text" autocomplete="off"></label>
+      <div class="fila">
+        <label class="campo"><span>Documento</span><input id="pDoc" type="text" autocomplete="off"></label>
+        <label class="campo"><span>Edad (años)</span><input id="pEdad" type="number" min="0" max="120"></label>
+      </div>
+      <div class="fila">
+        <label class="campo"><span>Sexo</span>
+          <select id="pSexo"><option value="">Sin indicar</option><option>Femenino</option><option>Masculino</option><option>Otro</option></select>
+        </label>
+        <label class="campo"><span>Peso (kg)</span><input id="pPeso" type="number" min="0" step="0.1"></label>
+      </div>
+      <div class="fila">
+        <label class="campo"><span>Estatura (cm)</span><input id="pEstatura" type="number" min="0" step="0.1"></label>
+        <label class="campo"><span>Profesional</span><input id="pProf" type="text" autocomplete="off"></label>
+      </div>
+    </section>
+
+    <section aria-labelledby="h-ajustes">
+      <h2 id="h-ajustes">Escala y ajustes</h2>
+      <label class="campo"><span>Escala (píxeles por centímetro)</span><input id="escala" type="number" min="0.1" step="0.1" value="10"></label>
+      <p class="ayuda">Mide un objeto de tamaño conocido en la imagen, por ejemplo una regla, y divide sus píxeles entre sus centímetros.</p>
+      <label class="campo"><span>Sensibilidad del verde</span>
+        <div class="rango"><input id="sens" type="range" min="5" max="60" value="16"><output id="sensValor">16</output></div>
+      </label>
+      <label class="campo"><span>Pie del paciente en el lado izquierdo de la imagen</span>
+        <select id="ladoImagen"><option value="derecho">Pie derecho</option><option value="izquierdo">Pie izquierdo</option></select>
+      </label>
+      <button class="btn" id="btnRecalcular" disabled>Recalcular con estos ajustes</button>
+    </section>
+
+    <section aria-labelledby="h-informe">
+      <h2 id="h-informe">Informe</h2>
+      <label class="campo"><span>Observaciones clínicas</span><textarea id="observaciones"></textarea></label>
+      <button class="btn primario" id="btnPDF" disabled>Descargar informe PDF</button>
+    </section>
+  </aside>
+</main>
+
+<script src="usuarios.js"></script>
+<script>
+"use strict";
+/* ====================== Inicio de sesión ======================
+   Control de acceso del lado del navegador. Los documentos autorizados están en usuarios.js
+   como hashes SHA-256 con sal (se generan con generar_usuarios.py). */
+(function(){
+  const CLAVE = "podoscopio_sesion";
+  const MAX_INTENTOS = 5, BLOQUEO_MS = 30000;
+  const $ = id => document.getElementById(id);
+  const datos = window.USUARIOS || { sal: "", lista: [] };
+  let intentos = 0, bloqueadoHasta = 0;
+
+  async function sha256(texto){
+    const buf = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(texto));
+    return Array.from(new Uint8Array(buf)).map(b => b.toString(16).padStart(2, "0")).join("");
+  }
+  const hashDoc = doc => sha256(datos.sal + ":" + doc);
+
+  function aviso(txt, tipo){ const a = $("loginAviso"); a.textContent = txt; a.className = "aviso" + (tipo ? " " + tipo : ""); }
+
+  function entrar(usuario, hash){
+    try { sessionStorage.setItem(CLAVE, hash); } catch (e) {}
+    document.body.classList.remove("bloqueado");
+    $("usuarioNombre").textContent = usuario.nombre || "";
+    const prof = document.getElementById("pProf");
+    if (prof && !prof.value && usuario.nombre) prof.value = usuario.nombre;
+    $("loginDoc").value = "";
+    aviso("");
+  }
+
+  function salir(){
+    try { sessionStorage.removeItem(CLAVE); } catch (e) {}
+    document.body.classList.add("bloqueado");
+    $("usuarioNombre").textContent = "";
+    $("loginDoc").focus();
+  }
+
+  async function validar(e){
+    e.preventDefault();
+    if (Date.now() < bloqueadoHasta){
+      aviso("Demasiados intentos. Espera unos segundos e inténtalo de nuevo.", "error"); return;
+    }
+    const doc = $("loginDoc").value.replace(/\D/g, "");
+    if (doc.length < 5){ aviso("Escribe tu número de documento (solo números).", "error"); return; }
+    if (!window.crypto || !crypto.subtle){ aviso("Este navegador no permite validar el acceso. Usa https o localhost.", "error"); return; }
+    const h = await hashDoc(doc);
+    const usuario = datos.lista.find(u => u.h === h);
+    if (usuario){ intentos = 0; entrar(usuario, h); return; }
+    intentos++;
+    if (intentos >= MAX_INTENTOS){ bloqueadoHasta = Date.now() + BLOQUEO_MS; intentos = 0; aviso("Demasiados intentos. Espera 30 segundos.", "error"); }
+    else aviso("Documento no autorizado.", "error");
+  }
+
+  $("formLogin").addEventListener("submit", validar);
+  $("btnSalir").addEventListener("click", salir);
+
+  // Recuperar la sesión de esta pestaña, si existe
+  (async function(){
+    let guardado = null;
+    try { guardado = sessionStorage.getItem(CLAVE); } catch (e) {}
+    const usuario = guardado && datos.lista.find(u => u.h === guardado);
+    if (usuario) entrar(usuario, guardado); else $("loginDoc").focus();
+  })();
+})();
+</script>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+<script>
+"use strict";
+
+/* ====================== Configuración ====================== */
+const CONFIG = {
+  STREAM_URL: "",            // Ejemplo: "/video_feed" si el servidor transmite la cámara. Vacío usa la cámara del navegador.
+  USAR_SERVIDOR: false,      // true envía la captura a API_ANALISIS en vez de calcular en el navegador.
+  API_ANALISIS: "/api/analizar",
+  ANCHO_MAX: 900,            // Ancho máximo de trabajo en píxeles
+  FRACCION_DEDOS: 0.2        // Parte superior de la huella reservada a los dedos
+};
+
+const INDICES = [
+  { id: "csi",         nombre: "Índice de Chippaux Smirak",  unidad: "%", dec: 1, t1: 25,   t2: 45,   min: 0, max: 80,  ref: "Normal de 25 a 45 %" },
+  { id: "staheli",     nombre: "Índice de Staheli",          unidad: "",  dec: 2, t1: 0.5,  t2: 0.7,  min: 0, max: 1.2, ref: "Normal de 0,50 a 0,70" },
+  { id: "indice_arco", nombre: "Índice de arco de Cavanagh", unidad: "",  dec: 2, t1: 0.21, t2: 0.26, min: 0, max: 0.5, ref: "Normal de 0,21 a 0,26" }
+];
+const NOMBRE_CLASE = { cavo: "Pie cavo", normal: "Pie normal", plano: "Pie plano" };
+
+/* ====================== Procesamiento (sin DOM) ====================== */
+// <<PURE>>
+function jet(v){
+  const f = t => Math.min(1, Math.max(0, t));
+  return [255*f(1.5-Math.abs(4*v-3)), 255*f(1.5-Math.abs(4*v-2)), 255*f(1.5-Math.abs(4*v-1))];
+}
+
+function mascaraVerde(data, w, h, umbral){
+  const mask = new Uint8Array(w*h), gr = new Int16Array(w*h);
+  for (let i = 0, p = 0; i < data.length; i += 4, p++){
+    const r = data[i], g = data[i+1], b = data[i+2], d = g - r;
+    gr[p] = d;
+    if (d > umbral && g > 60 && g > b) mask[p] = 1;
+  }
+  return { mask, gr };
+}
+
+function dilatar(src, w, h, r){
+  const tmp = new Uint8Array(w*h), out = new Uint8Array(w*h);
+  for (let y = 0; y < h; y++) for (let x = 0; x < w; x++){
+    let v = 0;
+    for (let k = -r; k <= r && !v; k++){ const xx = x+k; if (xx >= 0 && xx < w && src[y*w+xx]) v = 1; }
+    tmp[y*w+x] = v;
+  }
+  for (let y = 0; y < h; y++) for (let x = 0; x < w; x++){
+    let v = 0;
+    for (let k = -r; k <= r && !v; k++){ const yy = y+k; if (yy >= 0 && yy < h && tmp[yy*w+x]) v = 1; }
+    out[y*w+x] = v;
+  }
+  return out;
+}
+
+function erosionar(src, w, h, r){
+  const tmp = new Uint8Array(w*h), out = new Uint8Array(w*h);
+  for (let y = 0; y < h; y++) for (let x = 0; x < w; x++){
+    let v = 1;
+    for (let k = -r; k <= r && v; k++){ const xx = x+k; if (xx >= 0 && xx < w && !src[y*w+xx]) v = 0; }
+    tmp[y*w+x] = v;
+  }
+  for (let y = 0; y < h; y++) for (let x = 0; x < w; x++){
+    let v = 1;
+    for (let k = -r; k <= r && v; k++){ const yy = y+k; if (yy >= 0 && yy < h && !tmp[yy*w+x]) v = 0; }
+    out[y*w+x] = v;
+  }
+  return out;
+}
+
+function filtrarComponentes(mask, w, h, minArea){
+  const vis = new Uint8Array(w*h), out = new Uint8Array(w*h), pila = [];
+  for (let s = 0; s < w*h; s++){
+    if (!mask[s] || vis[s]) continue;
+    const comp = []; pila.length = 0; pila.push(s); vis[s] = 1;
+    while (pila.length){
+      const p = pila.pop(); comp.push(p);
+      const x = p % w, y = (p - x) / w;
+      if (x > 0     && mask[p-1] && !vis[p-1]){ vis[p-1] = 1; pila.push(p-1); }
+      if (x < w-1   && mask[p+1] && !vis[p+1]){ vis[p+1] = 1; pila.push(p+1); }
+      if (y > 0     && mask[p-w] && !vis[p-w]){ vis[p-w] = 1; pila.push(p-w); }
+      if (y < h-1   && mask[p+w] && !vis[p+w]){ vis[p+w] = 1; pila.push(p+w); }
+    }
+    if (comp.length >= minArea) for (const p of comp) out[p] = 1;
+  }
+  return out;
+}
+
+function dividirPies(mask, w, h){
+  const col = new Int32Array(w);
+  for (let y = 0; y < h; y++){ const o = y*w; for (let x = 0; x < w; x++) if (mask[o+x]) col[x]++; }
+  const a = Math.floor(w*0.25), b = Math.ceil(w*0.75);
+  let mejor = null, ini = -1;
+  for (let x = a; x <= b; x++){
+    const vacio = col[x] === 0;
+    if (vacio && ini < 0) ini = x;
+    if ((!vacio || x === b) && ini >= 0){
+      const fin = vacio ? x : x-1, len = fin - ini + 1;
+      if (!mejor || len > mejor.len) mejor = { ini, len };
+      ini = -1;
+    }
+  }
+  return mejor ? Math.round(mejor.ini + mejor.len/2) : Math.floor(w/2);
+}
+
+function medirPie(mask, w, h, x0, x1, esc, fracDedos){
+  const filas = new Float32Array(h);
+  let minY = -1, maxY = -1, minX = w, maxX = -1, total = 0;
+  for (let y = 0; y < h; y++){
+    let c = 0; const o = y*w;
+    for (let x = x0; x < x1; x++) if (mask[o+x]){ c++; if (x < minX) minX = x; if (x > maxX) maxX = x; }
+    filas[y] = c;
+    if (c > 0){ if (minY < 0) minY = y; maxY = y; total += c; }
+  }
+  if (minY < 0) return null;
+  const L = maxY - minY + 1;
+  if (L < 40) return null;
+
+  const s = new Float32Array(h), k = 3;
+  for (let y = 0; y < h; y++){
+    let acc = 0, n = 0;
+    for (let j = -k; j <= k; j++){ const yy = y+j; if (yy >= 0 && yy < h){ acc += filas[yy]; n++; } }
+    s[y] = acc / n;
+  }
+  const yDedos = minY + Math.round(fracDedos * L);
+  const resto = maxY - yDedos + 1;
+  const t1 = yDedos + Math.round(resto/3), t2 = yDedos + Math.round(2*resto/3);
+
+  let fore = 0, heel = 0, mid = Infinity, aF = 0, aM = 0, aH = 0;
+  for (let y = yDedos; y <= maxY; y++){
+    if (y < t1){ if (s[y] > fore) fore = s[y]; aF += filas[y]; }
+    else if (y < t2){ if (s[y] < mid) mid = s[y]; aM += filas[y]; }
+    else { if (s[y] > heel) heel = s[y]; aH += filas[y]; }
+  }
+  if (!isFinite(mid)) mid = 0;
+  const aT = aF + aM + aH;
+  return {
+    minY, maxY, minX, maxX, yDedos, t1, t2,
+    longitud_cm: L/esc, antepie_cm: fore/esc, arco_cm: mid/esc, talon_cm: heel/esc,
+    area_cm2: total/(esc*esc),
+    csi: fore > 0 ? mid/fore*100 : 0,
+    staheli: heel > 0 ? mid/heel : 0,
+    indice_arco: aT > 0 ? aM/aT : 0
+  };
+}
+
+function clasificar(valor, t1, t2){
+  if (valor < t1) return "cavo";
+  if (valor <= t2) return "normal";
+  return "plano";
+}
+
+function clasificacionPie(m){
+  const votos = { cavo: 0, normal: 0, plano: 0 };
+  INDICES.forEach(d => votos[clasificar(m[d.id], d.t1, d.t2)]++);
+  const orden = Object.keys(votos).sort((a, b) => votos[b] - votos[a]);
+  if (votos[orden[0]] === votos[orden[1]]) return clasificar(m.csi, 25, 45);
+  return orden[0];
+}
+
+function mapaIntensidad(mask, gr, w, h){
+  const hist = new Int32Array(512); let n = 0;
+  for (let i = 0; i < w*h; i++) if (mask[i]){ hist[gr[i]+255]++; n++; }
+  let p2 = 0, p98 = 255, acc = 0;
+  for (let i = 0; i < 512; i++){ acc += hist[i]; if (acc >= n*0.02){ p2 = i-255; break; } }
+  acc = 0;
+  for (let i = 0; i < 512; i++){ acc += hist[i]; if (acc >= n*0.98){ p98 = i-255; break; } }
+  if (p98 <= p2) p98 = p2 + 1;
+  let v = new Float32Array(w*h);
+  for (let i = 0; i < w*h; i++) if (mask[i]) v[i] = Math.min(1, Math.max(0, (gr[i]-p2)/(p98-p2)));
+  const r = 3;
+  for (let pasada = 0; pasada < 2; pasada++){
+    const t = new Float32Array(w*h), o = new Float32Array(w*h);
+    for (let y = 0; y < h; y++) for (let x = 0; x < w; x++){
+      let a = 0, c = 0;
+      for (let k = -r; k <= r; k++){ const xx = x+k; if (xx >= 0 && xx < w){ a += v[y*w+xx]; c++; } }
+      t[y*w+x] = a/c;
+    }
+    for (let y = 0; y < h; y++) for (let x = 0; x < w; x++){
+      let a = 0, c = 0;
+      for (let k = -r; k <= r; k++){ const yy = y+k; if (yy >= 0 && yy < h){ a += t[yy*w+x]; c++; } }
+      o[y*w+x] = a/c;
+    }
+    v = o;
+  }
+  for (let i = 0; i < w*h; i++) if (!mask[i]) v[i] = 0;
+  return v;
+}
+
+function suavizarMascara(mask, w, h, r){
+  const t = new Float32Array(w*h), out = new Uint8Array(w*h);
+  for (let y = 0; y < h; y++) for (let x = 0; x < w; x++){
+    let a = 0, c = 0;
+    for (let k = -r; k <= r; k++){ const xx = x+k; if (xx >= 0 && xx < w){ a += mask[y*w+xx]; c++; } }
+    t[y*w+x] = a/c;
+  }
+  for (let y = 0; y < h; y++) for (let x = 0; x < w; x++){
+    let a = 0, c = 0;
+    for (let k = -r; k <= r; k++){ const yy = y+k; if (yy >= 0 && yy < h){ a += t[yy*w+x]; c++; } }
+    out[y*w+x] = (a/c) > 0.5 ? 1 : 0;
+  }
+  return out;
+}
+
+function analizarDatos(data, w, h, opt){
+  const { mask: m0, gr } = mascaraVerde(data, w, h, opt.umbral);
+  const r = Math.max(2, Math.round(w * 0.006));
+  let m = erosionar(dilatar(m0, w, h, r), w, h, r);
+  m = filtrarComponentes(m, w, h, Math.round(0.0015 * w * h));
+  const split = dividirPies(m, w, h);
+  return {
+    mask: m, gr, split,
+    izq: medirPie(m, w, h, 0, split, opt.esc, opt.fracDedos),
+    der: medirPie(m, w, h, split, w, opt.esc, opt.fracDedos)
+  };
+}
+// <</PURE>>
+
+/* ====================== Estado e interfaz ====================== */
+const $ = id => document.getElementById(id);
+const frameCanvas = document.createElement("canvas");
+const estado = { tab: "vivo", camaraActiva: false, flujo: null, hayCaptura: false, resultado: null, calibrada: false };
+
+const fmt = (n, dec) => Number(n).toFixed(dec).replace(".", ",");
+
+function mostrarAviso(texto, tipo){
+  const a = $("aviso"); a.textContent = texto || ""; a.className = "aviso" + (tipo ? " " + tipo : "");
+}
+function ponerEstado(id, texto, activo){
+  const el = $(id); el.classList.toggle("activo", !!activo); el.lastElementChild.textContent = texto;
+}
+
+/* ---- Vistas ---- */
+const MENSAJES = {
+  vivo:    ["La cámara está apagada", "Presiona Iniciar cámara para ver la plataforma en tiempo real."],
+  captura: ["Aún no hay una captura", "Captura desde la cámara o carga una imagen para comenzar."],
+  seg:     ["Aún no hay segmentación", "Se genera al analizar una imagen."],
+  med:     ["Aún no hay medidas", "Se generan al analizar una imagen."],
+  mapa:    ["Aún no hay mapa de presión", "Se genera al analizar una imagen."]
+};
+
+function fuenteDeVista(n){
+  if (!estado.hayCaptura) return null;
+  if (n === "captura") return frameCanvas;
+  if (!estado.resultado) return null;
+  if (n === "seg") return estado.resultado.seg;
+  if (n === "med") return estado.resultado.med;
+  if (n === "mapa") return estado.resultado.heat;
+  return null;
+}
+
+function mostrarVista(n){
+  estado.tab = n;
+  document.querySelectorAll(".pestanas button").forEach(b => b.setAttribute("aria-selected", b.dataset.vista === n));
+  const vivo = n === "vivo";
+  $("video").classList.toggle("oculto", !(vivo && estado.camaraActiva && !CONFIG.STREAM_URL));
+  $("stream").classList.toggle("oculto", !(vivo && estado.camaraActiva && CONFIG.STREAM_URL));
+  $("enVivo").classList.toggle("oculto", !(vivo && estado.camaraActiva));
+  const src = vivo ? null : fuenteDeVista(n);
+  const lienzo = $("lienzo");
+  lienzo.classList.toggle("oculto", !src);
+  if (src){
+    lienzo.width = src.width; lienzo.height = src.height;
+    lienzo.getContext("2d").drawImage(src, 0, 0);
+  }
+  const hayContenido = vivo ? estado.camaraActiva : !!src;
+  $("vacio").classList.toggle("oculto", hayContenido);
+  if (!hayContenido){ $("vacioTitulo").textContent = MENSAJES[n][0]; $("vacioTexto").textContent = MENSAJES[n][1]; }
+  $("leyenda").classList.toggle("oculto", !(n === "mapa" && src));
+}
+document.querySelectorAll(".pestanas button").forEach(b => b.addEventListener("click", () => mostrarVista(b.dataset.vista)));
+
+/* ---- Cámara ---- */
+function ajustarAspecto(w, h){ if (w && h) $("visor").style.aspectRatio = w + " / " + h; }
+
+async function listarCamaras(){
+  if (!navigator.mediaDevices || !navigator.mediaDevices.enumerateDevices) return 0;
+  let dispositivos = [];
+  try { dispositivos = (await navigator.mediaDevices.enumerateDevices()).filter(d => d.kind === "videoinput"); }
+  catch (e) { return 0; }
+  const sel = $("selCamara"), previo = sel.value;
+  sel.innerHTML = "";
+  const base = document.createElement("option"); base.value = ""; base.textContent = "Cámara predeterminada"; sel.appendChild(base);
+  dispositivos.forEach((d, i) => {
+    const o = document.createElement("option"); o.value = d.deviceId; o.textContent = d.label || ("Cámara " + (i + 1)); sel.appendChild(o);
+  });
+  if ([...sel.options].some(o => o.value === previo)) sel.value = previo;
+  return dispositivos.length;
+}
+
+async function buscarCamaras(){
+  mostrarAviso("");
+  if (!estado.camaraActiva && navigator.mediaDevices && navigator.mediaDevices.getUserMedia){
+    try { (await navigator.mediaDevices.getUserMedia({ video: true })).getTracks().forEach(t => t.stop()); }
+    catch (e) { mostrarAviso("No se pudo acceder a las cámaras. Permite el acceso en el navegador y abre la página desde localhost o https.", "error"); }
+  }
+  const n = await listarCamaras();
+  if (n) mostrarAviso(n === 1 ? "Se encontró 1 cámara." : "Se encontraron " + n + " cámaras.", "ok");
+  else mostrarAviso("No se encontró ninguna cámara. Si usas el celular, revisa que Usar como cámara conectada esté activado en Windows.", "error");
+}
+
+function detenerFlujo(){
+  if (estado.flujo){ estado.flujo.getTracks().forEach(t => { t.onended = null; t.stop(); }); estado.flujo = null; }
+  $("video").srcObject = null;
+}
+
+async function iniciarCamara(){
+  mostrarAviso("");
+  detenerFlujo();
+  let resolucion = "";
+  try{
+    if (CONFIG.STREAM_URL){
+      $("stream").src = CONFIG.STREAM_URL;
+    } else {
+      if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) throw new Error("sin-soporte");
+      // Sin proporción fija: se pide la mayor resolución y el navegador usa el encuadre completo que entrega la cámara.
+      const video = { width: { ideal: 1920 }, height: { ideal: 1080 }, resizeMode: { ideal: "none" } };
+      const id = $("selCamara").value;
+      if (id) video.deviceId = { exact: id };
+      estado.flujo = await navigator.mediaDevices.getUserMedia({ video, audio: false });
+      const pista = estado.flujo.getVideoTracks()[0];
+      pista.onended = () => { mostrarAviso("La cámara se desconectó. Revisa la conexión del celular y vuelve a iniciarla.", "error"); detenerCamara(); };
+      const v = $("video"); v.srcObject = estado.flujo; await v.play();
+      ajustarAspecto(v.videoWidth, v.videoHeight);
+      resolucion = " " + v.videoWidth + "×" + v.videoHeight;
+      await listarCamaras();
+      const idReal = pista.getSettings().deviceId, sel = $("selCamara");
+      if (idReal && [...sel.options].some(o => o.value === idReal)) sel.value = idReal;
+    }
+    estado.camaraActiva = true;
+    $("btnCamara").textContent = "Detener cámara";
+    $("btnCapturar").disabled = false;
+    ponerEstado("estCamara", "Cámara activa" + resolucion, true);
+    mostrarVista("vivo");
+  } catch (e){
+    detenerFlujo();
+    const nombre = e && e.name;
+    let msg = "No se pudo acceder a la cámara. Permite el acceso en el navegador y abre la página desde localhost o https.";
+    if (nombre === "NotReadableError") msg = "La cámara está en uso por otro programa. Ciérralo, por ejemplo la app Cámara, Teams o Zoom, e inténtalo de nuevo.";
+    else if (nombre === "OverconstrainedError" || nombre === "NotFoundError") msg = "La cámara elegida ya no está disponible. Pulsa Actualizar lista y selecciónala otra vez.";
+    mostrarAviso(msg, "error");
+  }
+}
+function detenerCamara(){
+  detenerFlujo(); $("stream").removeAttribute("src");
+  estado.camaraActiva = false;
+  $("btnCamara").textContent = "Iniciar cámara";
+  $("btnCapturar").disabled = true;
+  ponerEstado("estCamara", "Cámara inactiva", false);
+  mostrarVista(estado.tab);
+}
+$("btnCamara").addEventListener("click", () => estado.camaraActiva ? detenerCamara() : iniciarCamara());
+$("btnBuscar").addEventListener("click", buscarCamaras);
+$("selCamara").addEventListener("change", () => { if (estado.camaraActiva) iniciarCamara(); });
+if (navigator.mediaDevices && navigator.mediaDevices.addEventListener) navigator.mediaDevices.addEventListener("devicechange", listarCamaras);
+window.addEventListener("beforeunload", detenerFlujo);
+
+/* ---- Captura y carga ---- */
+function tomarFrame(fuente, sw, sh){
+  const e = Math.min(1, CONFIG.ANCHO_MAX / sw);
+  frameCanvas.width = Math.round(sw * e); frameCanvas.height = Math.round(sh * e);
+  frameCanvas.getContext("2d").drawImage(fuente, 0, 0, frameCanvas.width, frameCanvas.height);
+  estado.hayCaptura = true;
+  ajustarAspecto(frameCanvas.width, frameCanvas.height);
+}
+$("btnCapturar").addEventListener("click", () => {
+  const v = CONFIG.STREAM_URL ? $("stream") : $("video");
+  const sw = CONFIG.STREAM_URL ? v.naturalWidth : v.videoWidth, sh = CONFIG.STREAM_URL ? v.naturalHeight : v.videoHeight;
+  if (!sw){ mostrarAviso("La cámara aún no entrega imagen. Espera un segundo e inténtalo de nuevo.", "error"); return; }
+  tomarFrame(v, sw, sh);
+  analizar();
+});
+$("btnCargar").addEventListener("click", () => $("archivo").click());
+$("archivo").addEventListener("change", e => {
+  const f = e.target.files[0]; if (!f) return;
+  const img = new Image();
+  img.onload = () => { tomarFrame(img, img.naturalWidth, img.naturalHeight); URL.revokeObjectURL(img.src); analizar(); };
+  img.onerror = () => mostrarAviso("No se pudo leer el archivo. Usa una imagen JPG o PNG.", "error");
+  img.src = URL.createObjectURL(f);
+  e.target.value = "";
+});
+
+/* ---- Dibujo de resultados ---- */
+function dibujarMedidas(mask, w, h, pies){
+  const c = document.createElement("canvas"); c.width = w; c.height = h;
+  const x = c.getContext("2d");
+  x.drawImage(frameCanvas, 0, 0);
+  x.fillStyle = "rgba(8,14,18,0.55)"; x.fillRect(0, 0, w, h);
+  const ov = x.createImageData(w, h), d = ov.data;
+  for (let i = 0; i < w*h; i++) if (mask[i]){ const o = i*4; d[o] = 64; d[o+1] = 196; d[o+2] = 210; d[o+3] = 175; }
+  const t = document.createElement("canvas"); t.width = w; t.height = h;
+  t.getContext("2d").putImageData(ov, 0, 0); x.drawImage(t, 0, 0);
+
+  const fs = Math.max(11, Math.round(w/75));
+  x.font = `500 ${fs}px "IBM Plex Sans", sans-serif`; x.textAlign = "center"; x.textBaseline = "middle";
+  x.lineWidth = Math.max(1, w/600);
+  const etiqueta = (txt, px, py) => {
+    x.lineWidth = 3; x.strokeStyle = "rgba(8,14,18,0.85)"; x.strokeText(txt, px, py);
+    x.fillStyle = "#fff"; x.fillText(txt, px, py);
+  };
+  pies.forEach(p => {
+    const m = p.m; if (!m) return;
+    const x0 = m.minX - fs, x1 = m.maxX + fs, cx = (m.minX + m.maxX) / 2;
+    x.strokeStyle = "rgba(255,255,255,0.92)"; x.lineWidth = Math.max(1, w/600); x.setLineDash([6, 5]);
+    [m.yDedos, m.t1, m.t2].forEach(yy => { x.beginPath(); x.moveTo(x0, yy + 0.5); x.lineTo(x1, yy + 0.5); x.stroke(); });
+    x.setLineDash([]);
+    x.strokeRect(m.minX - 3, m.minY - 3, (m.maxX - m.minX) + 6, (m.maxY - m.minY) + 6);
+    etiqueta("Antepié", cx, (m.yDedos + m.t1) / 2);
+    etiqueta("Arco",    cx, (m.t1 + m.t2) / 2);
+    etiqueta("Talón",   cx, (m.t2 + m.maxY) / 2);
+    etiqueta(p.nombre,  cx, Math.max(fs + 2, m.minY - fs));
+  });
+  return c;
+}
+
+function dibujarMapa(mask, gr, w, h){
+  const I = mapaIntensidad(mask, gr, w, h);
+  const c = document.createElement("canvas"); c.width = w; c.height = h;
+  const x = c.getContext("2d"), id = x.createImageData(w, h), d = id.data;
+  for (let i = 0; i < w*h; i++){
+    const o = i*4;
+    if (mask[i]){ const [r, g, b] = jet(I[i]); d[o] = r; d[o+1] = g; d[o+2] = b; }
+    else { d[o] = 12; d[o+1] = 19; d[o+2] = 23; }
+    d[o+3] = 255;
+  }
+  x.putImageData(id, 0, 0);
+  return c;
+}
+
+function dibujarMascaraRecortada(mask, w, h, pies){
+  const v = pies.filter(p => p.m);
+  const alto = Math.max(...v.map(p => p.m.maxY - p.m.minY + 1));
+  const mg = Math.max(8, Math.round(alto * 0.06));
+  const y0 = Math.max(0, Math.min(...v.map(p => p.m.minY)) - mg);
+  const y1 = Math.min(h - 1, Math.max(...v.map(p => p.m.maxY)) + mg);
+  const ch = y1 - y0 + 1, hueco = Math.round(alto * 0.08);
+  const cortes = v.map(p => ({ p, x0: Math.max(p.xa, p.m.minX - mg), x1: Math.min(p.xb - 1, p.m.maxX + mg) }));
+  const cw = cortes.reduce((a, c) => a + (c.x1 - c.x0 + 1), 0) + hueco * (cortes.length - 1);
+  const c = document.createElement("canvas"); c.width = cw; c.height = ch;
+  const x = c.getContext("2d"), id = x.createImageData(cw, ch), d = id.data;
+  for (let i = 3; i < d.length; i += 4) d[i] = 255;
+  let ox = 0; const marcas = [];
+  cortes.forEach(k => {
+    for (let yy = 0; yy < ch; yy++) for (let xx = k.x0; xx <= k.x1; xx++){
+      if (mask[(y0 + yy) * w + xx]){ const o = (yy * cw + ox + (xx - k.x0)) * 4; d[o] = d[o+1] = d[o+2] = 255; }
+    }
+    marcas.push([k.p.nombre, ox]); ox += (k.x1 - k.x0 + 1) + hueco;
+  });
+  x.putImageData(id, 0, 0);
+  const fs = Math.max(11, Math.round(ch / 30));
+  x.font = `500 ${fs}px "IBM Plex Sans", sans-serif`; x.fillStyle = "#7d8e97"; x.textBaseline = "top";
+  marcas.forEach(([n, px]) => x.fillText(n, px + 6, 6));
+  return c;
+}
+
+/* ---- Análisis ---- */
+function analizarLocal(esc, umbral){
+  const w = frameCanvas.width, h = frameCanvas.height;
+  const data = frameCanvas.getContext("2d").getImageData(0, 0, w, h).data;
+  const r = analizarDatos(data, w, h, { umbral, esc, fracDedos: CONFIG.FRACCION_DEDOS });
+  if (!r.izq && !r.der) throw new Error("No se detectó la zona verde de contacto. Aumenta la sensibilidad o repite la captura.");
+  const izqEsDer = $("ladoImagen").value === "derecho";
+  const pies = [
+    { m: r.izq, nombre: izqEsDer ? "Pie derecho" : "Pie izquierdo", xa: 0, xb: r.split },
+    { m: r.der, nombre: izqEsDer ? "Pie izquierdo" : "Pie derecho", xa: r.split, xb: w }
+  ];
+  const lisa = suavizarMascara(r.mask, w, h, 2);
+  return {
+    pies: { derecho: izqEsDer ? r.izq : r.der, izquierdo: izqEsDer ? r.der : r.izq },
+    seg: dibujarMascaraRecortada(lisa, w, h, pies),
+    med: dibujarMedidas(r.mask, w, h, pies),
+    heat: dibujarMapa(r.mask, r.gr, w, h)
+  };
+}
+
+async function analizarServidor(esc){
+  const blob = await new Promise(res => frameCanvas.toBlob(res, "image/png"));
+  const fd = new FormData(); fd.append("imagen", blob, "captura.png"); fd.append("escala_px_cm", esc);
+  const resp = await fetch(CONFIG.API_ANALISIS, { method: "POST", body: fd });
+  if (!resp.ok) throw new Error("El servidor respondió con el error " + resp.status);
+  const j = await resp.json();
+  const cargar = url => new Promise((ok, mal) => {
+    const im = new Image(); im.onload = () => { const c = document.createElement("canvas"); c.width = im.width; c.height = im.height; c.getContext("2d").drawImage(im, 0, 0); ok(c); }; im.onerror = mal; im.src = url;
+  });
+  const seg = await cargar(j.mascara);
+  return { pies: { derecho: j.derecho, izquierdo: j.izquierdo }, seg, med: seg, heat: await cargar(j.mapa) };
+}
+
+async function analizar(){
+  mostrarAviso("Analizando la imagen...");
+  $("btnRecalcular").disabled = true; $("btnPDF").disabled = true;
+  await new Promise(r => setTimeout(r, 30));
+  const esc = parseFloat($("escala").value) || 10, umbral = parseInt($("sens").value, 10);
+  try{
+    estado.resultado = CONFIG.USAR_SERVIDOR ? await analizarServidor(esc) : analizarLocal(esc, umbral);
+    estado.escalaUsada = esc;
+    mostrarResultados();
+    $("btnRecalcular").disabled = false; $("btnPDF").disabled = false;
+    mostrarAviso("Análisis completo.", "ok");
+    mostrarVista("seg");
+  } catch (e){
+    estado.resultado = null; mostrarResultados();
+    $("btnRecalcular").disabled = !estado.hayCaptura;
+    mostrarAviso(e.message || "No se pudo analizar la imagen.", "error");
+    mostrarVista(estado.hayCaptura ? "captura" : estado.tab);
+  }
+}
+$("btnRecalcular").addEventListener("click", analizar);
+$("sens").addEventListener("input", e => $("sensValor").textContent = e.target.value);
+$("escala").addEventListener("input", () => { estado.calibrada = true; });
+
+/* ---- Tabla de resultados ---- */
+function tira(def, val){
+  const span = def.max - def.min, p = v => Math.min(100, Math.max(0, (v - def.min) / span * 100));
+  const a = p(def.t1), b = p(def.t2), m = p(val);
+  return `<div class="tira" role="img" aria-label="Valor ${fmt(val, def.dec)} sobre la escala de referencia">
+      <i class="s-cavo" style="width:${a}%"></i><i class="s-normal" style="width:${b - a}%"></i><i class="s-plano" style="width:${100 - b}%"></i><b style="left:${m}%"></b>
+    </div>
+    <div class="tira-escala"><span style="left:0">${fmt(def.min, def.dec)}</span><span style="left:${a}%">${fmt(def.t1, def.dec)}</span><span style="left:${b}%">${fmt(def.t2, def.dec)}</span><span style="left:100%">${fmt(def.max, def.dec)}</span></div>`;
+}
+function filaMedida(n, v, u){ return `<div class="medida"><dt>${n}</dt><dd>${v}<span>${u}</span></dd></div>`; }
+
+function bloquePie(titulo, lado, m){
+  if (!m) return `<article class="pie"><header><h3>${titulo}</h3><span class="lado">${lado}</span></header><p class="sin-pie">No se detectó la huella de este pie. Ajusta la sensibilidad o repite la captura.</p></article>`;
+  const cl = clasificacionPie(m);
+  const indices = INDICES.map(d => {
+    const v = m[d.id], c = clasificar(v, d.t1, d.t2);
+    return `<div class="indice">
+      <div class="indice-cab"><h4>${d.nombre}</h4><span class="indice-valor">${fmt(v, d.dec)}<small>${d.unidad}</small></span></div>
+      ${tira(d, v)}
+      <p class="indice-ref"><span class="etiqueta c-${c}" style="margin:0;padding:1px 9px">${NOMBRE_CLASE[c]}</span> ${d.ref}</p>
+    </div>`;
+  }).join("");
+  return `<article class="pie">
+    <header><h3>${titulo}</h3><span class="lado">${lado}</span></header>
+    <span class="etiqueta c-${cl}">Clasificación orientativa: ${NOMBRE_CLASE[cl].toLowerCase()}</span>
+    <dl class="medidas">
+      ${filaMedida("Longitud del pie", fmt(m.longitud_cm, 1), "cm")}
+      ${filaMedida("Ancho del antepié", fmt(m.antepie_cm, 1), "cm")}
+      ${filaMedida("Ancho del arco", fmt(m.arco_cm, 1), "cm")}
+      ${filaMedida("Ancho del talón", fmt(m.talon_cm, 1), "cm")}
+      ${filaMedida("Área de contacto", fmt(m.area_cm2, 1), "cm²")}
+    </dl>
+    ${indices}
+  </article>`;
+}
+
+function mostrarResultados(){
+  const cont = $("resultados"), r = estado.resultado;
+  if (!r){
+    cont.innerHTML = `<h2>Resultados</h2><p class="nota">Captura o carga una imagen para calcular las métricas de ambos pies.</p>`;
+    return;
+  }
+  const aviso = estado.calibrada ? "" : `<p class="alerta-escala">La escala no está calibrada, por eso las medidas en centímetros son referenciales. Los índices son proporciones y no dependen de la escala.</p>`;
+  const izqEsDer = $("ladoImagen").value === "derecho";
+  cont.innerHTML = `<h2>Resultados</h2>
+    <p class="nota">Las clasificaciones son orientativas y se calculan con umbrales de referencia. La valoración final corresponde al profesional.</p>
+    ${aviso}
+    <div class="pies">
+      ${bloquePie("Pie derecho", izqEsDer ? "Lado izquierdo de la imagen" : "Lado derecho de la imagen", r.pies.derecho)}
+      ${bloquePie("Pie izquierdo", izqEsDer ? "Lado derecho de la imagen" : "Lado izquierdo de la imagen", r.pies.izquierdo)}
+    </div>`;
+}
+
+/* ---- Informe PDF ---- */
+function descargarPDF(){
+  const lib = window.jspdf, r = estado.resultado;
+  if (!r) return;
+  if (!lib){ mostrarAviso("No se cargó la librería del PDF. Revisa la conexión a internet y recarga la página.", "error"); return; }
+  const doc = new lib.jsPDF({ unit: "mm", format: "a4" });
+  const W = 210, M = 15; let y = 0;
+  const ahora = new Date(), fecha = ahora.toLocaleDateString("es-CO") + " " + ahora.toLocaleTimeString("es-CO", { hour: "2-digit", minute: "2-digit" });
+  const val = (id, def) => ($(id).value || "").trim() || def;
+
+  doc.setFillColor(27, 94, 135); doc.rect(0, 0, W, 26, "F");
+  doc.setTextColor(255, 255, 255); doc.setFont("helvetica", "bold"); doc.setFontSize(17); doc.text("Informe podoscópico", M, 13);
+  doc.setFont("helvetica", "normal"); doc.setFontSize(9); doc.text("Análisis digital de la bóveda plantar", M, 19.5);
+  doc.text(fecha, W - M, 13, { align: "right" });
+
+  const titulo = t => {
+    doc.setFont("helvetica", "bold"); doc.setFontSize(11); doc.setTextColor(27, 94, 135); doc.text(t, M, y);
+    doc.setDrawColor(212, 221, 226); doc.line(M, y + 1.8, W - M, y + 1.8); y += 8; doc.setTextColor(23, 38, 45);
+  };
+  const par = (x, etiqueta, valor) => {
+    doc.setFont("helvetica", "normal"); doc.setFontSize(8.5); doc.setTextColor(91, 111, 121); doc.text(etiqueta, x, y);
+    doc.setFontSize(10); doc.setTextColor(23, 38, 45); doc.text(String(valor), x + 28, y);
+  };
+
+  y = 36; titulo("Datos del paciente");
+  const c2 = W / 2 + 3;
+  par(M, "Nombre", val("pNombre", "No registrado")); par(c2, "Documento", val("pDoc", "No registrado")); y += 6;
+  par(M, "Edad", val("pEdad", "No registrada") + ($("pEdad").value ? " años" : "")); par(c2, "Sexo", val("pSexo", "No indicado")); y += 6;
+  par(M, "Peso", val("pPeso", "No registrado") + ($("pPeso").value ? " kg" : "")); par(c2, "Estatura", val("pEstatura", "No registrada") + ($("pEstatura").value ? " cm" : "")); y += 6;
+  par(M, "Profesional", val("pProf", "No registrado")); y += 10;
+
+  titulo("Imágenes del examen");
+  const gap = 4, iw = (W - 2*M - 3*gap) / 4, hMax = 46;
+  const imgs = [[frameCanvas, "Imagen capturada"], [r.seg, "Segmentación"], [r.med, "Medidas"], [r.heat, "Mapa de presión"]];
+  const medidas = imgs.map(([c]) => { const e = Math.min(iw / c.width, hMax / c.height); return [c.width * e, c.height * e]; });
+  const altoFila = Math.max(...medidas.map(m => m[1]));
+  imgs.forEach(([c, leyenda], i) => {
+    const x = M + i * (iw + gap);
+    doc.addImage(c.toDataURL("image/jpeg", 0.85), "JPEG", x, y, medidas[i][0], medidas[i][1]);
+    doc.setFontSize(8); doc.setFont("helvetica", "normal"); doc.setTextColor(91, 111, 121);
+    doc.text(leyenda, x, y + altoFila + 4.5);
+  });
+  y += altoFila + 12;
+
+  titulo("Resultados");
+  const cols = [M, 82, 112, 142];
+  doc.setFillColor(230, 240, 246); doc.rect(M, y - 4.5, W - 2*M, 7, "F");
+  doc.setFont("helvetica", "bold"); doc.setFontSize(9); doc.setTextColor(20, 74, 107);
+  ["Parámetro", "Pie derecho", "Pie izquierdo", "Referencia"].forEach((t, i) => doc.text(t, cols[i], y));
+  y += 7;
+  const d = r.pies.derecho, iz = r.pies.izquierdo;
+  const g = (m, k, dec) => m ? fmt(m[k], dec) : "Sin dato";
+  const filas = [
+    ["Longitud del pie (cm)", g(d, "longitud_cm", 1), g(iz, "longitud_cm", 1), ""],
+    ["Ancho del antepié (cm)", g(d, "antepie_cm", 1), g(iz, "antepie_cm", 1), ""],
+    ["Ancho del arco (cm)", g(d, "arco_cm", 1), g(iz, "arco_cm", 1), ""],
+    ["Ancho del talón (cm)", g(d, "talon_cm", 1), g(iz, "talon_cm", 1), ""],
+    ["Área de contacto (cm²)", g(d, "area_cm2", 1), g(iz, "area_cm2", 1), ""],
+    ...INDICES.map(def => [def.nombre + (def.unidad ? " (" + def.unidad + ")" : ""), g(d, def.id, def.dec), g(iz, def.id, def.dec), def.ref])
+  ];
+  doc.setFont("helvetica", "normal"); doc.setFontSize(9.5); doc.setTextColor(23, 38, 45);
+  filas.forEach(f => {
+    f.forEach((t, i) => { if (i === 3) doc.setFontSize(8.5); else doc.setFontSize(9.5); doc.text(t, cols[i], y); });
+    doc.setDrawColor(228, 234, 238); doc.line(M, y + 2, W - M, y + 2); y += 6.6;
+  });
+  y += 3;
+
+  const colorClase = { cavo: [91, 75, 183], normal: [46, 125, 79], plano: [184, 106, 18] };
+  [["Pie derecho", d], ["Pie izquierdo", iz]].forEach(([n, m]) => {
+    doc.setFont("helvetica", "bold"); doc.setFontSize(10); doc.setTextColor(23, 38, 45); doc.text(n + ":", M, y);
+    if (m){ const c = clasificacionPie(m); doc.setTextColor(...colorClase[c]); doc.text(NOMBRE_CLASE[c] + " (orientativo)", M + 28, y); }
+    else { doc.setTextColor(91, 111, 121); doc.text("Sin dato", M + 28, y); }
+    y += 6;
+  });
+  y += 3;
+
+  if (y > 225){ doc.addPage(); y = 20; }
+  titulo("Observaciones clínicas");
+  doc.setFont("helvetica", "normal"); doc.setFontSize(10); doc.setTextColor(23, 38, 45);
+  const obs = doc.splitTextToSize(val("observaciones", "Sin observaciones."), W - 2*M);
+  const maxLineas = Math.max(3, Math.floor((274 - y) / 4.4));
+  doc.text(obs.slice(0, maxLineas), M, y);
+
+  doc.setFontSize(8); doc.setTextColor(91, 111, 121);
+  const pie = [];
+  if (!estado.calibrada) pie.push("La escala no estaba calibrada, por lo que las medidas en centímetros son referenciales.");
+  pie.push("Este informe es una herramienta de apoyo calculada a partir de la huella plantar. Los índices y umbrales son de referencia y no sustituyen la valoración clínica del profesional.");
+  doc.text(doc.splitTextToSize(pie.join(" "), W - 2*M), M, 280);
+
+  const nombreArchivo = "informe_podoscopico_" + val("pNombre", "paciente").toLowerCase().replace(/[^a-z0-9]+/g, "_") + ".pdf";
+  doc.save(nombreArchivo);
+  mostrarAviso("Informe descargado.", "ok");
+}
+$("btnPDF").addEventListener("click", descargarPDF);
+
+/* ---- Arranque ---- */
+if (CONFIG.USAR_SERVIDOR) ponerEstado("estAnalisis", "Análisis en el servidor", true);
+mostrarResultados();
+mostrarVista("vivo");
+listarCamaras();
+</script>
+</body>
+</html>
