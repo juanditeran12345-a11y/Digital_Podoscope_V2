@@ -1,0 +1,46 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // Profesional activo (existe su ficha en /profesionales y está activo)
+    function esProf() {
+      return request.auth != null
+        && exists(/databases/$(database)/documents/profesionales/$(request.auth.uid))
+        && get(/databases/$(database)/documents/profesionales/$(request.auth.uid)).data.activo == true;
+    }
+    function esAdmin() {
+      return esProf()
+        && get(/databases/$(database)/documents/profesionales/$(request.auth.uid)).data.rol == 'admin';
+    }
+
+    // Fichas de profesionales: cada quien lee la suya; solo el administrador lista y modifica
+    match /profesionales/{uid} {
+      allow get: if request.auth != null && request.auth.uid == uid;
+      allow list: if esAdmin();
+      allow create, update: if esAdmin();
+      allow delete: if false;
+    }
+
+    // Registro de pacientes: solo profesionales
+    match /pacientes/{id} {
+      allow read, create, update: if esProf();
+      allow delete: if esAdmin();
+    }
+
+    // Informes: profesionales, o el paciente dueño con el correo verificado
+    match /informes/{id} {
+      allow read: if esProf()
+        || (request.auth != null
+            && request.auth.token.email_verified == true
+            && resource.data.pacienteEmail == request.auth.token.email.lower());
+      allow create: if esProf() && request.resource.data.profesionalUid == request.auth.uid;
+      allow update: if esProf();
+      allow delete: if esAdmin();
+    }
+
+    // Todo lo demás, cerrado
+    match /{document=**} {
+      allow read, write: if false;
+    }
+  }
+}
