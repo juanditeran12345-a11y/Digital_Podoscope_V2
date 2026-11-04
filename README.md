@@ -1,4 +1,14 @@
-# Digital Podoscope
+# Podoscopio digital
 
-Web interface for a digital podoscope built with a transparent acrylic platform and edge lighting. It takes an image from a camera or a phone, segments the plantar contact area, calculates foot arch indices and exports a clinical PDF report.
+Interfaz web (carpeta `docs/`, publicada con GitHub Pages) con:
 
+- Acceso para **profesionales** (documento + contraseña) y **pacientes** (correo + contraseña).
+- Registro de pacientes e informes guardados en Firebase (Authentication + Firestore).
+- El paciente descarga su informe en PDF desde su portal.
+
+Archivos clave:
+
+- `docs/index.html`: interfaz y análisis.
+- `docs/acceso.js`: inicio de sesión, registro, informes y administración.
+- `firestore.rules`: reglas de seguridad (se pegan en Firebase > Firestore > Reglas).
+- `GUIA_FIREBASE.md`: configuración paso a paso.
