@@ -181,30 +181,58 @@ button,input,select,textarea{font:inherit;color:inherit}
 .rango output{min-width:2.5ch; text-align:right; font-weight:600}
 .lateral .btn{width:100%}
 
-/* Inicio de sesión */
-body.bloqueado > header.barra, body.bloqueado > main.cuerpo{display:none}
-.login{
-  position:fixed; inset:0; z-index:50; display:none; align-items:center; justify-content:center;
-  padding:20px; background:var(--papel);
-}
-body.bloqueado .login{display:flex}
-.login-caja{
-  width:100%; max-width:380px; background:var(--blanco); border:1px solid var(--regla);
-  border-radius:8px; padding:28px 26px 26px;
-}
+/* Acceso, portal y registro */
+body:not([data-vista="pro"]) > header.barra, body:not([data-vista="pro"]) > main.cuerpo{display:none}
+.login,.portal,.cargando{display:none}
+body[data-vista="login"] .login{display:flex}
+body[data-vista="paciente"] .portal{display:block}
+body[data-vista="cargando"] .cargando{display:flex}
+.cargando{position:fixed; inset:0; align-items:center; justify-content:center; color:var(--apagado)}
+.login{position:fixed; inset:0; z-index:50; align-items:flex-start; justify-content:center; padding:24px 16px; background:var(--papel); overflow:auto}
+.login-caja{width:100%; max-width:410px; margin:auto; background:var(--blanco); border:1px solid var(--regla); border-radius:8px; padding:26px}
 .login-caja .marca{margin-bottom:18px}
 .login-caja h2{font-size:17px; font-weight:600; margin-bottom:4px}
-.login-caja .ayuda{margin:0 0 16px}
+.login-caja .ayuda{margin:0 0 14px}
 .login-caja .btn{width:100%}
-.usuario-sesion{display:inline-flex; align-items:center; gap:10px; font-size:13px; color:var(--apagado)}
+.tabs-login{display:grid; grid-template-columns:1fr 1fr; gap:6px; margin-bottom:18px; background:var(--papel); padding:4px; border-radius:8px}
+.tabs-login button{border:0; background:transparent; padding:8px; border-radius:6px; cursor:pointer; font-weight:500; color:var(--apagado)}
+.tabs-login button.activa{background:var(--blanco); color:var(--azul-oscuro); box-shadow:0 0 0 1px var(--regla)}
+.enlaces{display:flex; justify-content:space-between; gap:10px; margin-top:12px}
+.enlace{background:none; border:0; padding:0; color:var(--azul-oscuro); cursor:pointer; text-decoration:underline; font-size:13px}
+.consent{display:flex; gap:8px; align-items:flex-start; font-size:13px; color:var(--apagado); margin-bottom:12px}
+.consent input{margin-top:3px}
+.usuario-sesion{display:inline-flex; align-items:center; gap:8px; flex-wrap:wrap; font-size:13px; color:var(--apagado)}
 .usuario-sesion .btn{padding:5px 12px; font-size:13px}
-@media print{ .lateral,.acciones,.pestanas,.barra,.login{display:none} }
+.lateral .btn + .btn{margin-top:8px}
+.lateral .btn.separado{margin-top:8px}
+.portal{min-height:100vh}
+.portal-cab{display:flex; align-items:center; justify-content:space-between; gap:12px; flex-wrap:wrap; padding:14px 24px; background:var(--blanco); border-bottom:1px solid var(--regla)}
+.portal-cuerpo{max-width:760px; margin:0 auto; padding:24px 20px 48px}
+.portal-cuerpo h2{font-size:18px; margin-bottom:6px}
+.portal-cuerpo .btn{width:auto}
+.informe-item{display:flex; align-items:center; justify-content:space-between; gap:12px; flex-wrap:wrap; background:var(--blanco); border:1px solid var(--regla); border-radius:8px; padding:14px 16px; margin-top:10px}
+.informe-item small{display:block; color:var(--apagado)}
+.modal{position:fixed; inset:0; z-index:60; display:flex; align-items:flex-start; justify-content:center; padding:24px 16px; background:rgba(12,19,23,.55); overflow:auto}
+.modal.oculto{display:none}
+.modal-caja{width:100%; max-width:880px; background:var(--blanco); border-radius:8px; padding:22px; border:1px solid var(--regla)}
+.modal-caja.angosta{max-width:420px}
+.modal-cab{display:flex; justify-content:space-between; align-items:center; gap:12px; margin-bottom:14px}
+.modal-cab h2,.modal-cab h3{font-size:17px; font-weight:600}
+.tabla{width:100%; border-collapse:collapse; font-size:14px}
+.tabla th,.tabla td{text-align:left; padding:8px 10px; border-bottom:1px solid var(--regla); vertical-align:middle}
+.tabla th{font-size:12px; color:var(--apagado); font-weight:500}
+.tabla td .btn{padding:4px 10px; font-size:13px; width:auto}
+.scroll-x{overflow-x:auto}
+.modal-caja h3.sub{font-size:15px; margin:20px 0 10px}
+@media print{ .lateral,.acciones,.pestanas,.barra,.login,.modal{display:none} }
 </style>
 </head>
-<body class="bloqueado">
+<body data-vista="cargando">
 
-<div class="login" id="login" role="dialog" aria-modal="true" aria-labelledby="loginTitulo">
-  <form class="login-caja" id="formLogin" autocomplete="off" novalidate>
+<div class="cargando" role="status">Cargando…</div>
+
+<div class="login" id="login">
+  <div class="login-caja">
     <div class="marca">
       <svg width="34" height="34" viewBox="0 0 34 34" aria-hidden="true">
         <rect width="34" height="34" rx="8" fill="#1b5e87"/>
@@ -214,14 +242,110 @@ body.bloqueado .login{display:flex}
       </svg>
       <div><h1>Podoscopio digital</h1></div>
     </div>
-    <h2 id="loginTitulo">Iniciar sesión</h2>
-    <p class="ayuda">Ingresa tu número de documento de identidad para acceder.</p>
-    <label class="campo"><span>Número de documento</span>
-      <input id="loginDoc" type="text" inputmode="numeric" autocomplete="off" required>
-    </label>
-    <button class="btn primario" id="btnLogin" type="submit">Ingresar</button>
+
+    <div class="tabs-login" role="tablist">
+      <button type="button" id="tabProf" class="activa" role="tab">Profesional</button>
+      <button type="button" id="tabPac" role="tab">Paciente</button>
+    </div>
+
+    <form id="formProf" novalidate>
+      <label class="campo"><span>Usuario (número de documento)</span>
+        <input id="profDoc" type="text" inputmode="numeric" autocomplete="username"></label>
+      <label class="campo"><span>Contraseña</span>
+        <input id="profClave" type="password" autocomplete="current-password"></label>
+      <button class="btn primario" id="btnProfEntrar" type="submit">Ingresar</button>
+    </form>
+
+    <form id="formPac" class="oculto" novalidate>
+      <h2 id="pacTitulo">Acceso de pacientes</h2>
+      <p class="ayuda" id="pacAyuda"></p>
+      <label class="campo"><span>Correo electrónico</span>
+        <input id="pacEmail" type="email" autocomplete="email"></label>
+      <label class="campo" id="bloqueClave"><span>Contraseña</span>
+        <input id="pacClave" type="password" autocomplete="current-password"></label>
+      <label class="campo oculto" id="bloqueClave2"><span>Repite la contraseña</span>
+        <input id="pacClave2" type="password" autocomplete="new-password"></label>
+      <label class="consent oculto" id="bloqueConsent">
+        <input type="checkbox" id="pacConsent">
+        <span>Autorizo el tratamiento de mis datos personales y de salud para generar y consultar mis informes podoscópicos, conforme a la Ley 1581 de 2012.</span>
+      </label>
+      <button class="btn primario" id="btnPac" type="submit">Ingresar</button>
+      <div class="enlaces"><button type="button" class="enlace" id="lnkA"></button><button type="button" class="enlace" id="lnkB"></button></div>
+    </form>
+
     <p class="aviso" id="loginAviso" role="alert"></p>
-  </form>
+  </div>
+</div>
+
+<div class="portal" id="portal">
+  <header class="portal-cab">
+    <div class="marca"><div><h1>Podoscopio digital</h1><p>Mis informes</p></div></div>
+    <span class="usuario-sesion"><span id="portalCorreo"></span><button class="btn" id="btnSalirPac" type="button">Cerrar sesión</button></span>
+  </header>
+  <div class="portal-cuerpo">
+    <section id="portalVerificar" class="oculto">
+      <h2>Verifica tu correo</h2>
+      <p class="ayuda" style="margin:0 0 14px">Enviamos un enlace de verificación a <b id="verifCorreo"></b>. Ábrelo y luego pulsa el botón de abajo. Revisa también la carpeta de spam.</p>
+      <button class="btn primario" id="btnYaVerifique" type="button">Ya verifiqué mi correo</button>
+      <button class="btn" id="btnReenviar" type="button">Reenviar correo</button>
+      <p class="aviso" id="verifAviso" role="alert"></p>
+    </section>
+    <section id="portalInformes" class="oculto">
+      <h2>Mis informes</h2>
+      <p class="nota">Aquí aparecen los informes que tu profesional registró con este correo.</p>
+      <div id="listaInformes"></div>
+      <p class="aviso" id="portalAviso" role="alert"></p>
+    </section>
+  </div>
+</div>
+
+<div class="modal oculto" id="modalRegistro" role="dialog" aria-modal="true" aria-labelledby="tRegistro">
+  <div class="modal-caja">
+    <div class="modal-cab"><h2 id="tRegistro">Registro de pacientes</h2><button class="btn" type="button" data-cerrar>Cerrar</button></div>
+    <div id="regLista">
+      <label class="campo"><span>Buscar por nombre, documento o correo</span><input id="regBuscar" type="search" autocomplete="off"></label>
+      <div class="scroll-x"><table class="tabla"><thead><tr><th>Nombre</th><th>Documento</th><th>Correo</th><th></th></tr></thead><tbody id="regCuerpo"></tbody></table></div>
+      <p class="aviso" id="regAviso" role="alert"></p>
+    </div>
+    <div id="regDetalle" class="oculto">
+      <div class="modal-cab"><h3 id="regDetalleTit"></h3><button class="btn" type="button" id="regVolver">Volver a la lista</button></div>
+      <div class="scroll-x"><table class="tabla"><thead><tr><th>Fecha</th><th>Profesional</th><th></th></tr></thead><tbody id="regInformes"></tbody></table></div>
+      <p class="aviso" id="regDetAviso" role="alert"></p>
+    </div>
+  </div>
+</div>
+
+<div class="modal oculto" id="modalProfs" role="dialog" aria-modal="true" aria-labelledby="tProfs">
+  <div class="modal-caja">
+    <div class="modal-cab"><h2 id="tProfs">Profesionales</h2><button class="btn" type="button" data-cerrar>Cerrar</button></div>
+    <div class="scroll-x"><table class="tabla"><thead><tr><th>Nombre</th><th>Documento</th><th>Rol</th><th>Estado</th><th></th></tr></thead><tbody id="profsCuerpo"></tbody></table></div>
+    <h3 class="sub">Agregar profesional</h3>
+    <form id="formNuevoProf" novalidate>
+      <div class="fila">
+        <label class="campo"><span>Número de documento (será su usuario)</span><input id="npDoc" type="text" inputmode="numeric" autocomplete="off"></label>
+        <label class="campo"><span>Nombre completo</span><input id="npNombre" type="text" autocomplete="off"></label>
+      </div>
+      <div class="fila">
+        <label class="campo"><span>Contraseña inicial (mínimo 8 caracteres)</span><input id="npClave" type="text" autocomplete="off"></label>
+        <label class="campo"><span>Rol</span><select id="npRol"><option value="profesional">Profesional</option><option value="admin">Administrador</option></select></label>
+      </div>
+      <button class="btn primario" id="btnCrearProf" type="submit" style="width:auto">Crear profesional</button>
+    </form>
+    <p class="aviso" id="profsAviso" role="alert"></p>
+  </div>
+</div>
+
+<div class="modal oculto" id="modalClave" role="dialog" aria-modal="true" aria-labelledby="tClave">
+  <div class="modal-caja angosta">
+    <div class="modal-cab"><h2 id="tClave">Cambiar contraseña</h2><button class="btn" type="button" data-cerrar>Cerrar</button></div>
+    <form id="formClave" novalidate>
+      <label class="campo"><span>Contraseña actual</span><input id="ccActual" type="password" autocomplete="current-password"></label>
+      <label class="campo"><span>Contraseña nueva (mínimo 8 caracteres)</span><input id="ccNueva" type="password" autocomplete="new-password"></label>
+      <label class="campo"><span>Repite la contraseña nueva</span><input id="ccNueva2" type="password" autocomplete="new-password"></label>
+      <button class="btn primario" type="submit" style="width:100%">Guardar contraseña</button>
+    </form>
+    <p class="aviso" id="claveAviso" role="alert"></p>
+  </div>
 </div>
 
 <header class="barra">
@@ -240,7 +364,7 @@ body.bloqueado .login{display:flex}
   <div class="estados">
     <span class="estado" id="estCamara"><i></i><span>Cámara inactiva</span></span>
     <span class="estado" id="estAnalisis"><i></i><span>Análisis en el navegador</span></span>
-    <span class="usuario-sesion"><span id="usuarioNombre"></span><button class="btn" id="btnSalir" type="button">Cerrar sesión</button></span>
+    <span class="usuario-sesion"><span id="usuarioNombre"></span><button class="btn" id="btnRegistro" type="button">Pacientes</button><button class="btn oculto" id="btnProfs" type="button">Profesionales</button><button class="btn" id="btnClave" type="button">Contraseña</button><button class="btn" id="btnSalir" type="button">Cerrar sesión</button></span>
   </div>
 </header>
 
@@ -293,6 +417,7 @@ body.bloqueado .login{display:flex}
     <section aria-labelledby="h-paciente">
       <h2 id="h-paciente">Datos del paciente</h2>
       <label class="campo"><span>Nombre completo</span><input id="pNombre" type="text" autocomplete="off"></label>
+      <label class="campo"><span>Correo del paciente (con él accede a su informe)</span><input id="pEmail" type="email" autocomplete="off"></label>
       <div class="fila">
         <label class="campo"><span>Documento</span><input id="pDoc" type="text" autocomplete="off"></label>
         <label class="campo"><span>Edad (años)</span><input id="pEdad" type="number" min="0" max="120"></label>
@@ -307,6 +432,7 @@ body.bloqueado .login{display:flex}
         <label class="campo"><span>Estatura (cm)</span><input id="pEstatura" type="number" min="0" step="0.1"></label>
         <label class="campo"><span>Profesional</span><input id="pProf" type="text" autocomplete="off"></label>
       </div>
+      <button class="btn" id="btnGuardarPaciente" type="button">Guardar paciente en el registro</button>
     </section>
 
     <section aria-labelledby="h-ajustes">
@@ -325,77 +451,11 @@ body.bloqueado .login{display:flex}
     <section aria-labelledby="h-informe">
       <h2 id="h-informe">Informe</h2>
       <label class="campo"><span>Observaciones clínicas</span><textarea id="observaciones"></textarea></label>
+      <button class="btn" id="btnGuardarInforme" type="button" disabled>Guardar informe en el registro</button>
       <button class="btn primario" id="btnPDF" disabled>Descargar informe PDF</button>
     </section>
   </aside>
 </main>
-
-<script src="usuarios.js"></script>
-<script>
-"use strict";
-/* ====================== Inicio de sesión ======================
-   Control de acceso del lado del navegador. Los documentos autorizados están en usuarios.js
-   como hashes SHA-256 con sal (se generan con generar_usuarios.py). */
-(function(){
-  const CLAVE = "podoscopio_sesion";
-  const MAX_INTENTOS = 5, BLOQUEO_MS = 30000;
-  const $ = id => document.getElementById(id);
-  const datos = window.USUARIOS || { sal: "", lista: [] };
-  let intentos = 0, bloqueadoHasta = 0;
-
-  async function sha256(texto){
-    const buf = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(texto));
-    return Array.from(new Uint8Array(buf)).map(b => b.toString(16).padStart(2, "0")).join("");
-  }
-  const hashDoc = doc => sha256(datos.sal + ":" + doc);
-
-  function aviso(txt, tipo){ const a = $("loginAviso"); a.textContent = txt; a.className = "aviso" + (tipo ? " " + tipo : ""); }
-
-  function entrar(usuario, hash){
-    try { sessionStorage.setItem(CLAVE, hash); } catch (e) {}
-    document.body.classList.remove("bloqueado");
-    $("usuarioNombre").textContent = usuario.nombre || "";
-    const prof = document.getElementById("pProf");
-    if (prof && !prof.value && usuario.nombre) prof.value = usuario.nombre;
-    $("loginDoc").value = "";
-    aviso("");
-  }
-
-  function salir(){
-    try { sessionStorage.removeItem(CLAVE); } catch (e) {}
-    document.body.classList.add("bloqueado");
-    $("usuarioNombre").textContent = "";
-    $("loginDoc").focus();
-  }
-
-  async function validar(e){
-    e.preventDefault();
-    if (Date.now() < bloqueadoHasta){
-      aviso("Demasiados intentos. Espera unos segundos e inténtalo de nuevo.", "error"); return;
-    }
-    const doc = $("loginDoc").value.replace(/\D/g, "");
-    if (doc.length < 5){ aviso("Escribe tu número de documento (solo números).", "error"); return; }
-    if (!window.crypto || !crypto.subtle){ aviso("Este navegador no permite validar el acceso. Usa https o localhost.", "error"); return; }
-    const h = await hashDoc(doc);
-    const usuario = datos.lista.find(u => u.h === h);
-    if (usuario){ intentos = 0; entrar(usuario, h); return; }
-    intentos++;
-    if (intentos >= MAX_INTENTOS){ bloqueadoHasta = Date.now() + BLOQUEO_MS; intentos = 0; aviso("Demasiados intentos. Espera 30 segundos.", "error"); }
-    else aviso("Documento no autorizado.", "error");
-  }
-
-  $("formLogin").addEventListener("submit", validar);
-  $("btnSalir").addEventListener("click", salir);
-
-  // Recuperar la sesión de esta pestaña, si existe
-  (async function(){
-    let guardado = null;
-    try { guardado = sessionStorage.getItem(CLAVE); } catch (e) {}
-    const usuario = guardado && datos.lista.find(u => u.h === guardado);
-    if (usuario) entrar(usuario, guardado); else $("loginDoc").focus();
-  })();
-})();
-</script>
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
 <script>
@@ -884,14 +944,14 @@ async function analizarServidor(esc){
 
 async function analizar(){
   mostrarAviso("Analizando la imagen...");
-  $("btnRecalcular").disabled = true; $("btnPDF").disabled = true;
+  $("btnRecalcular").disabled = true; $("btnPDF").disabled = true; $("btnGuardarInforme").disabled = true;
   await new Promise(r => setTimeout(r, 30));
   const esc = parseFloat($("escala").value) || 10, umbral = parseInt($("sens").value, 10);
   try{
     estado.resultado = CONFIG.USAR_SERVIDOR ? await analizarServidor(esc) : analizarLocal(esc, umbral);
     estado.escalaUsada = esc;
     mostrarResultados();
-    $("btnRecalcular").disabled = false; $("btnPDF").disabled = false;
+    $("btnRecalcular").disabled = false; $("btnPDF").disabled = false; $("btnGuardarInforme").disabled = false;
     mostrarAviso("Análisis completo.", "ok");
     mostrarVista("seg");
   } catch (e){
@@ -959,14 +1019,47 @@ function mostrarResultados(){
 }
 
 /* ---- Informe PDF ---- */
-function descargarPDF(){
-  const lib = window.jspdf, r = estado.resultado;
-  if (!r) return;
-  if (!lib){ mostrarAviso("No se cargó la librería del PDF. Revisa la conexión a internet y recarga la página.", "error"); return; }
+const CLAVES_PIE = ["longitud_cm", "antepie_cm", "arco_cm", "talon_cm", "area_cm2", "csi", "staheli", "indice_arco"];
+function limpiarPie(m){
+  if (!m) return null;
+  const o = {}; CLAVES_PIE.forEach(k => { const v = Number(m[k]); o[k] = isFinite(v) ? v : 0; }); return o;
+}
+function aImagen(canvas, maxAncho, calidad){
+  let c = canvas;
+  if (maxAncho && canvas.width > maxAncho){
+    const e = maxAncho / canvas.width;
+    c = document.createElement("canvas"); c.width = Math.round(canvas.width * e); c.height = Math.round(canvas.height * e);
+    c.getContext("2d").drawImage(canvas, 0, 0, c.width, c.height);
+  }
+  return { url: c.toDataURL("image/jpeg", calidad), w: c.width, h: c.height };
+}
+// Reúne todo lo que muestra el informe en un objeto simple (se puede guardar y volver a dibujar)
+function capturarInforme(maxAncho, calidad){
+  const r = estado.resultado;
+  if (!r) return null;
+  const val = id => ($(id).value || "").trim();
+  const imgs = [[frameCanvas, "Imagen capturada"], [r.seg, "Segmentación"], [r.med, "Medidas"], [r.heat, "Mapa de presión"]];
+  return {
+    fecha: new Date().toISOString(),
+    paciente: {
+      nombre: val("pNombre"), documento: val("pDoc"), email: val("pEmail").toLowerCase(), edad: val("pEdad"),
+      sexo: val("pSexo"), peso: val("pPeso"), estatura: val("pEstatura"), profesional: val("pProf")
+    },
+    imagenes: imgs.map(([c, leyenda]) => Object.assign(aImagen(c, maxAncho, calidad), { leyenda })),
+    pies: { derecho: limpiarPie(r.pies.derecho), izquierdo: limpiarPie(r.pies.izquierdo) },
+    calibrada: !!estado.calibrada,
+    observaciones: val("observaciones")
+  };
+}
+
+function generarPDF(d){
+  const lib = window.jspdf;
+  if (!lib) return false;
   const doc = new lib.jsPDF({ unit: "mm", format: "a4" });
   const W = 210, M = 15; let y = 0;
-  const ahora = new Date(), fecha = ahora.toLocaleDateString("es-CO") + " " + ahora.toLocaleTimeString("es-CO", { hour: "2-digit", minute: "2-digit" });
-  const val = (id, def) => ($(id).value || "").trim() || def;
+  const ahora = new Date(d.fecha), fecha = ahora.toLocaleDateString("es-CO") + " " + ahora.toLocaleTimeString("es-CO", { hour: "2-digit", minute: "2-digit" });
+  const P = d.paciente || {};
+  const val = (v, def) => (v == null ? "" : String(v)).trim() || def;
 
   doc.setFillColor(27, 94, 135); doc.rect(0, 0, W, 26, "F");
   doc.setTextColor(255, 255, 255); doc.setFont("helvetica", "bold"); doc.setFontSize(17); doc.text("Informe podoscópico", M, 13);
@@ -984,21 +1077,21 @@ function descargarPDF(){
 
   y = 36; titulo("Datos del paciente");
   const c2 = W / 2 + 3;
-  par(M, "Nombre", val("pNombre", "No registrado")); par(c2, "Documento", val("pDoc", "No registrado")); y += 6;
-  par(M, "Edad", val("pEdad", "No registrada") + ($("pEdad").value ? " años" : "")); par(c2, "Sexo", val("pSexo", "No indicado")); y += 6;
-  par(M, "Peso", val("pPeso", "No registrado") + ($("pPeso").value ? " kg" : "")); par(c2, "Estatura", val("pEstatura", "No registrada") + ($("pEstatura").value ? " cm" : "")); y += 6;
-  par(M, "Profesional", val("pProf", "No registrado")); y += 10;
+  par(M, "Nombre", val(P.nombre, "No registrado")); par(c2, "Documento", val(P.documento, "No registrado")); y += 6;
+  par(M, "Edad", val(P.edad, "") ? val(P.edad, "") + " años" : "No registrada"); par(c2, "Sexo", val(P.sexo, "No indicado")); y += 6;
+  par(M, "Peso", val(P.peso, "") ? val(P.peso, "") + " kg" : "No registrado"); par(c2, "Estatura", val(P.estatura, "") ? val(P.estatura, "") + " cm" : "No registrada"); y += 6;
+  par(M, "Profesional", val(P.profesional, "No registrado")); y += 10;
 
   titulo("Imágenes del examen");
   const gap = 4, iw = (W - 2*M - 3*gap) / 4, hMax = 46;
-  const imgs = [[frameCanvas, "Imagen capturada"], [r.seg, "Segmentación"], [r.med, "Medidas"], [r.heat, "Mapa de presión"]];
-  const medidas = imgs.map(([c]) => { const e = Math.min(iw / c.width, hMax / c.height); return [c.width * e, c.height * e]; });
-  const altoFila = Math.max(...medidas.map(m => m[1]));
-  imgs.forEach(([c, leyenda], i) => {
+  const imgs = d.imagenes || [];
+  const medidas = imgs.map(im => { const e = Math.min(iw / im.w, hMax / im.h); return [im.w * e, im.h * e]; });
+  const altoFila = Math.max(1, ...medidas.map(m => m[1]));
+  imgs.forEach((im, i) => {
     const x = M + i * (iw + gap);
-    doc.addImage(c.toDataURL("image/jpeg", 0.85), "JPEG", x, y, medidas[i][0], medidas[i][1]);
+    doc.addImage(im.url, "JPEG", x, y, medidas[i][0], medidas[i][1]);
     doc.setFontSize(8); doc.setFont("helvetica", "normal"); doc.setTextColor(91, 111, 121);
-    doc.text(leyenda, x, y + altoFila + 4.5);
+    doc.text(im.leyenda, x, y + altoFila + 4.5);
   });
   y += altoFila + 12;
 
@@ -1008,15 +1101,15 @@ function descargarPDF(){
   doc.setFont("helvetica", "bold"); doc.setFontSize(9); doc.setTextColor(20, 74, 107);
   ["Parámetro", "Pie derecho", "Pie izquierdo", "Referencia"].forEach((t, i) => doc.text(t, cols[i], y));
   y += 7;
-  const d = r.pies.derecho, iz = r.pies.izquierdo;
+  const dr = d.pies.derecho, iz = d.pies.izquierdo;
   const g = (m, k, dec) => m ? fmt(m[k], dec) : "Sin dato";
   const filas = [
-    ["Longitud del pie (cm)", g(d, "longitud_cm", 1), g(iz, "longitud_cm", 1), ""],
-    ["Ancho del antepié (cm)", g(d, "antepie_cm", 1), g(iz, "antepie_cm", 1), ""],
-    ["Ancho del arco (cm)", g(d, "arco_cm", 1), g(iz, "arco_cm", 1), ""],
-    ["Ancho del talón (cm)", g(d, "talon_cm", 1), g(iz, "talon_cm", 1), ""],
-    ["Área de contacto (cm²)", g(d, "area_cm2", 1), g(iz, "area_cm2", 1), ""],
-    ...INDICES.map(def => [def.nombre + (def.unidad ? " (" + def.unidad + ")" : ""), g(d, def.id, def.dec), g(iz, def.id, def.dec), def.ref])
+    ["Longitud del pie (cm)", g(dr, "longitud_cm", 1), g(iz, "longitud_cm", 1), ""],
+    ["Ancho del antepié (cm)", g(dr, "antepie_cm", 1), g(iz, "antepie_cm", 1), ""],
+    ["Ancho del arco (cm)", g(dr, "arco_cm", 1), g(iz, "arco_cm", 1), ""],
+    ["Ancho del talón (cm)", g(dr, "talon_cm", 1), g(iz, "talon_cm", 1), ""],
+    ["Área de contacto (cm²)", g(dr, "area_cm2", 1), g(iz, "area_cm2", 1), ""],
+    ...INDICES.map(def => [def.nombre + (def.unidad ? " (" + def.unidad + ")" : ""), g(dr, def.id, def.dec), g(iz, def.id, def.dec), def.ref])
   ];
   doc.setFont("helvetica", "normal"); doc.setFontSize(9.5); doc.setTextColor(23, 38, 45);
   filas.forEach(f => {
@@ -1026,7 +1119,7 @@ function descargarPDF(){
   y += 3;
 
   const colorClase = { cavo: [91, 75, 183], normal: [46, 125, 79], plano: [184, 106, 18] };
-  [["Pie derecho", d], ["Pie izquierdo", iz]].forEach(([n, m]) => {
+  [["Pie derecho", dr], ["Pie izquierdo", iz]].forEach(([n, m]) => {
     doc.setFont("helvetica", "bold"); doc.setFontSize(10); doc.setTextColor(23, 38, 45); doc.text(n + ":", M, y);
     if (m){ const c = clasificacionPie(m); doc.setTextColor(...colorClase[c]); doc.text(NOMBRE_CLASE[c] + " (orientativo)", M + 28, y); }
     else { doc.setTextColor(91, 111, 121); doc.text("Sin dato", M + 28, y); }
@@ -1037,19 +1130,25 @@ function descargarPDF(){
   if (y > 225){ doc.addPage(); y = 20; }
   titulo("Observaciones clínicas");
   doc.setFont("helvetica", "normal"); doc.setFontSize(10); doc.setTextColor(23, 38, 45);
-  const obs = doc.splitTextToSize(val("observaciones", "Sin observaciones."), W - 2*M);
+  const obs = doc.splitTextToSize(val(d.observaciones, "Sin observaciones."), W - 2*M);
   const maxLineas = Math.max(3, Math.floor((274 - y) / 4.4));
   doc.text(obs.slice(0, maxLineas), M, y);
 
   doc.setFontSize(8); doc.setTextColor(91, 111, 121);
   const pie = [];
-  if (!estado.calibrada) pie.push("La escala no estaba calibrada, por lo que las medidas en centímetros son referenciales.");
+  if (!d.calibrada) pie.push("La escala no estaba calibrada, por lo que las medidas en centímetros son referenciales.");
   pie.push("Este informe es una herramienta de apoyo calculada a partir de la huella plantar. Los índices y umbrales son de referencia y no sustituyen la valoración clínica del profesional.");
   doc.text(doc.splitTextToSize(pie.join(" "), W - 2*M), M, 280);
 
-  const nombreArchivo = "informe_podoscopico_" + val("pNombre", "paciente").toLowerCase().replace(/[^a-z0-9]+/g, "_") + ".pdf";
-  doc.save(nombreArchivo);
-  mostrarAviso("Informe descargado.", "ok");
+  doc.save("informe_podoscopico_" + val(P.nombre, "paciente").toLowerCase().replace(/[^a-z0-9]+/g, "_") + ".pdf");
+  return true;
+}
+
+function descargarPDF(){
+  const d = capturarInforme(null, 0.85);
+  if (!d) return;
+  if (generarPDF(d)) mostrarAviso("Informe descargado.", "ok");
+  else mostrarAviso("No se cargó la librería del PDF. Revisa la conexión a internet y recarga la página.", "error");
 }
 $("btnPDF").addEventListener("click", descargarPDF);
 
@@ -1059,5 +1158,9 @@ mostrarResultados();
 mostrarVista("vivo");
 listarCamaras();
 </script>
+<script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-auth-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-firestore-compat.js"></script>
+<script src="acceso.js"></script>
 </body>
 </html>
