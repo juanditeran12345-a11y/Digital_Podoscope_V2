@@ -172,6 +172,16 @@
 
   var PASOS = ['superior izquierda', 'superior derecha', 'inferior derecha', 'inferior izquierda'];
 
+  /** Ordena 4 puntos como TL, TR, BR, BL sin importar el orden de los clics (válido con inclinación < ~45°). */
+  function ordenarEsquinas(p) {
+    var s = p.map(function (q) { return q[0] + q[1]; });   // TL: menor suma, BR: mayor suma
+    var d = p.map(function (q) { return q[0] - q[1]; });   // TR: mayor diferencia, BL: menor diferencia
+    var iTL = s.indexOf(Math.min.apply(null, s)), iBR = s.indexOf(Math.max.apply(null, s));
+    var iTR = d.indexOf(Math.max.apply(null, d)), iBL = d.indexOf(Math.min.apply(null, d));
+    var distintos = [iTL, iTR, iBR, iBL].filter(function (v, i, A) { return A.indexOf(v) === i; }).length === 4;
+    return distintos ? [p[iTL], p[iTR], p[iBR], p[iBL]] : p;   // si es degenerado se deja el orden original
+  }
+
   /**
    * Muestra la imagen original en el lienzo y espera 4 toques (esquinas internas del anillo verde de la ventana,
    * en el orden superior izquierda, superior derecha, inferior derecha, inferior izquierda).
@@ -203,7 +213,7 @@
       pts.push(posicion(ev)); dibujar(); mensaje();
       if (pts.length === 4) {
         quitar();
-        alTerminar(pts.map(function (p) { return [p[0] / e, p[1] / e]; }));
+        alTerminar(ordenarEsquinas(pts).map(function (p) { return [p[0] / e, p[1] / e]; }));
       }
     }
     function quitar() { lienzo.removeEventListener('pointerdown', alToque); lienzo.style.touchAction = ''; lienzo.style.cursor = ''; }
@@ -222,7 +232,8 @@
     segmentar: segmentar,
     remuestrearVertical: remuestrearVertical,
     remuestrearCanvas: remuestrearCanvas,
-    marcarVentana: marcarVentana
+    marcarVentana: marcarVentana,
+    ordenarEsquinas: ordenarEsquinas
   };
   if (typeof module !== 'undefined' && module.exports) module.exports = PodoIA.App;
 })(typeof window !== 'undefined' ? window : globalThis);
