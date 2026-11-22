@@ -403,10 +403,17 @@
       bc.drawImage(s, 0, 0, canvas.width, canvas.height);
       dibujar();
     }
-    function escalaPantalla() { var r = canvas.getBoundingClientRect(); return r.width ? canvas.width / r.width : 1; }
-    function aCanvas(ev) {
+    // El lienzo se muestra con CSS object-fit:contain: la imagen puede quedar centrada con bandas vacías.
+    // Hay que descontar ese desplazamiento y usar la escala real (la del lado limitante), no la del elemento.
+    function geomVisible() {
       var r = canvas.getBoundingClientRect();
-      return { x: (ev.clientX - r.left) * canvas.width / r.width, y: (ev.clientY - r.top) * canvas.height / r.height };
+      var e = Math.min(r.width / canvas.width, r.height / canvas.height) || 1;
+      return { r: r, e: e, ox: (r.width - canvas.width * e) / 2, oy: (r.height - canvas.height * e) / 2 };
+    }
+    function escalaPantalla() { return 1 / geomVisible().e; }
+    function aCanvas(ev) {
+      var g = geomVisible();
+      return { x: (ev.clientX - g.r.left - g.ox) / g.e, y: (ev.clientY - g.r.top - g.oy) / g.e };
     }
     function resultado() {
       return pares.length ? Object.assign(escalaDesdePuntos(pares), { pares: pares.map(function (p) { return Object.assign({}, p); }) })
