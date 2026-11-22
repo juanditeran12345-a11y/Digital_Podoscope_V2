@@ -191,8 +191,11 @@
     }
     function mensaje() { alAvisar(pts.length < 4 ? 'Toca la esquina ' + PASOS[pts.length] + ' de la ventana (borde interno del anillo verde). Paso ' + (pts.length + 1) + ' de 4.' : 'Esquinas marcadas.'); }
     function posicion(ev) {
+      // El lienzo usa object-fit:contain: se descuentan las bandas vacías y se usa la escala del lado limitante.
       var r = lienzo.getBoundingClientRect();
-      return [(ev.clientX - r.left) * lienzo.width / r.width, (ev.clientY - r.top) * lienzo.height / r.height];
+      var k = Math.min(r.width / lienzo.width, r.height / lienzo.height) || 1;
+      var ox = (r.width - lienzo.width * k) / 2, oy = (r.height - lienzo.height * k) / 2;
+      return [(ev.clientX - r.left - ox) / k, (ev.clientY - r.top - oy) / k];
     }
     function alToque(ev) {
       if (pts.length >= 4) return;
