@@ -16,7 +16,7 @@
   var PodoIA = raiz.PodoIA = raiz.PodoIA || {};
 
   var CFG = {
-    rutaModelo: 'modelo/plantar.onnx',
+    rutaModelo: 'modelo/plantar_roboflow.onnx',
     // onnxruntime-web: versión fijada. Los archivos .wasm/.mjs se cargan de la misma carpeta.
     ortBase: 'https://cdn.jsdelivr.net/npm/onnxruntime-web@1.31.1/dist/',
     ortScript: 'ort.wasm.min.js',
