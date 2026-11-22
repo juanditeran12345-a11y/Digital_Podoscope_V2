@@ -439,6 +439,15 @@ body[data-vista="cargando"] .cargando{display:flex}
       <h2 id="h-ajustes">Escala y ajustes</h2>
       <label class="campo"><span>Escala (píxeles por centímetro)</span><input id="escala" type="number" min="0.1" step="0.1" value="10"></label>
       <p class="ayuda">Mide un objeto de tamaño conocido en la imagen, por ejemplo una regla, y divide sus píxeles entre sus centímetros.</p>
+      <label class="campo"><span>Modo de segmentación</span>
+        <select id="modoAnalisis"><option value="umbral">Por umbral del verde (manual)</option><option value="ia">Con modelo de IA (automático)</option></select>
+      </label>
+      <p class="ayuda" id="iaEstado">En el modo de IA la escala se calibra sola con el marcador de 6 cm. La primera vez se descarga el modelo (≈94 MB).</p>
+      <button class="btn" id="btnCalibrar" type="button" disabled>Calibrar con dos o más puntos</button>
+      <div id="calibPanel"></div>
+      <p class="ayuda" id="calibEstado"></p>
+      <button class="btn" id="btnRecorteManual" type="button" disabled>Marcar la ventana a mano</button>
+      <p class="ayuda" id="recorteEstado">La ventana de la plataforma se recorta sola al capturar o cargar una imagen.</p>
       <label class="campo"><span>Sensibilidad del verde</span>
         <div class="rango"><input id="sens" type="range" min="5" max="150" value="16"><output id="sensValor">16</output></div>
       </label>
@@ -458,6 +467,10 @@ body[data-vista="cargando"] .cargando{display:flex}
 </main>
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+<script src="ia/recorte.js"></script>
+<script src="ia/calibracion.js"></script>
+<script src="ia/ia_modelo.js"></script>
+<script src="ia/modo_ia.js"></script>
 <script>
 "use strict";
 
@@ -659,7 +672,8 @@ function suavizarMascara(mask, w, h, r){
 }
 
 function analizarDatos(data, w, h, opt){
-  const { mask: m0, gr } = mascaraVerde(data, w, h, opt.umbral);
+  const { mask: mv, gr } = mascaraVerde(data, w, h, opt.umbral);
+  const m0 = opt.mascaraExterna || mv;   // modo IA: la máscara de contacto la entrega el modelo
   const r = Math.max(2, Math.round(w * 0.006));
   let m = erosionar(dilatar(m0, w, h, r), w, h, r);
   m = filtrarComponentes(m, w, h, Math.round(0.0015 * w * h));
@@ -813,11 +827,20 @@ window.addEventListener("beforeunload", detenerFlujo);
 
 /* ---- Captura y carga ---- */
 function tomarFrame(fuente, sw, sh){
-  const e = Math.min(1, CONFIG.ANCHO_MAX / sw);
-  frameCanvas.width = Math.round(sw * e); frameCanvas.height = Math.round(sh * e);
-  frameCanvas.getContext("2d").drawImage(fuente, 0, 0, frameCanvas.width, frameCanvas.height);
+  estado.calibManual = false; estado.notas = []; estado.rectCanvas = null; estado.original = null;
+  // Recorte automático de la ventana (modos umbral e IA). Si no se logra, se sigue con la imagen completa como antes.
+  let recortada = false;
+  try { recortada = !!(window.PodoIA && PodoIA.App && PodoIA.App.prepararEntrada(fuente, sw, sh, frameCanvas, estado)); }
+  catch (err) { console.warn("Recorte automático:", err); estado.recorteInfo = { ok: false, auto: false, manual: false, confianza: 0, motivo: "Falló el recorte automático." }; }
+  if (recortada){ guardarRecortada(); }
+  else {
+    const e = Math.min(1, CONFIG.ANCHO_MAX / sw);
+    frameCanvas.width = Math.round(sw * e); frameCanvas.height = Math.round(sh * e);
+    frameCanvas.getContext("2d").drawImage(fuente, 0, 0, frameCanvas.width, frameCanvas.height);
+  }
   estado.hayCaptura = true;
   ajustarAspecto(frameCanvas.width, frameCanvas.height);
+  actualizarControlesIA();
 }
 $("btnCapturar").addEventListener("click", () => {
   const v = CONFIG.STREAM_URL ? $("stream") : $("video");
@@ -910,10 +933,10 @@ function dibujarMascaraRecortada(mask, w, h, pies){
 }
 
 /* ---- Análisis ---- */
-function analizarLocal(esc, umbral){
+function analizarLocal(esc, umbral, mascaraExt){
   const w = frameCanvas.width, h = frameCanvas.height;
   const data = frameCanvas.getContext("2d").getImageData(0, 0, w, h).data;
-  const r = analizarDatos(data, w, h, { umbral, esc, fracDedos: CONFIG.FRACCION_DEDOS });
+  const r = analizarDatos(data, w, h, { umbral, esc, fracDedos: CONFIG.FRACCION_DEDOS, mascaraExterna: mascaraExt });
   if (!r.izq && !r.der) throw new Error("No se detectó la zona verde de contacto. Aumenta la sensibilidad o repite la captura.");
   const izqEsDer = $("ladoImagen").value === "derecho";
   const pies = [
@@ -946,13 +969,19 @@ async function analizar(){
   mostrarAviso("Analizando la imagen...");
   $("btnRecalcular").disabled = true; $("btnPDF").disabled = true; $("btnGuardarInforme").disabled = true;
   await new Promise(r => setTimeout(r, 30));
-  const esc = parseFloat($("escala").value) || 10, umbral = parseInt($("sens").value, 10);
+  let esc = parseFloat($("escala").value) || 10; const umbral = parseInt($("sens").value, 10);
+  estado.notas = [];
   try{
-    estado.resultado = CONFIG.USAR_SERVIDOR ? await analizarServidor(esc) : analizarLocal(esc, umbral);
+    if ($("modoAnalisis").value === "ia" && !CONFIG.USAR_SERVIDOR){
+      const r = await analizarIA(); estado.resultado = r.resultado; esc = r.esc;
+    } else {
+      restaurarEncuadre();
+      estado.resultado = CONFIG.USAR_SERVIDOR ? await analizarServidor(esc) : analizarLocal(esc, umbral);
+    }
     estado.escalaUsada = esc;
     mostrarResultados();
     $("btnRecalcular").disabled = false; $("btnPDF").disabled = false; $("btnGuardarInforme").disabled = false;
-    mostrarAviso("Análisis completo.", "ok");
+    mostrarAviso(("Análisis completo. " + estado.notas.join(" ")).trim(), "ok");
     mostrarVista("seg");
   } catch (e){
     estado.resultado = null; mostrarResultados();
@@ -962,6 +991,109 @@ async function analizar(){
   }
 }
 $("btnRecalcular").addEventListener("click", analizar);
+
+/* ---- Modo IA, recorte y calibración (módulos PodoIA) ---- */
+function guardarRecortada(){
+  // Copia de la imagen recortada tal como la vio el modelo en el entrenamiento (no se corrige la escala sobre ella).
+  const c = estado.rectCanvas || (estado.rectCanvas = document.createElement("canvas"));
+  c.width = frameCanvas.width; c.height = frameCanvas.height; c.getContext("2d").drawImage(frameCanvas, 0, 0);
+  if (!estado.calibrada && PodoIA.App) $("escala").value = PodoIA.App.CFG.escalaVentana.toFixed(1);   // escala nominal, sin marcar como calibrada
+}
+function restaurarEncuadre(){
+  const c = estado.rectCanvas; if (!c) return;
+  if (frameCanvas.width !== c.width || frameCanvas.height !== c.height){ frameCanvas.width = c.width; frameCanvas.height = c.height; }
+  frameCanvas.getContext("2d").drawImage(c, 0, 0);
+  ajustarAspecto(frameCanvas.width, frameCanvas.height);
+}
+function textoProgresoIA(p){
+  if (p === null || p === undefined) return "Descargando el modelo de IA…";
+  return p < 1 ? "Descargando el modelo de IA (≈94 MB, solo la primera vez): " + Math.round(p * 100) + " %" : "Preparando el modelo de IA…";
+}
+function ponerProgresoIA(p){ const t = textoProgresoIA(p); $("iaEstado").textContent = t; mostrarAviso(t); }
+async function analizarIA(){
+  if (!window.PodoIA || !PodoIA.App) throw new Error("Los módulos del modo IA no se cargaron.");
+  if (!estado.rectCanvas){
+    const m = estado.recorteInfo && estado.recorteInfo.motivo ? estado.recorteInfo.motivo + " " : "";
+    throw new Error("El modo de IA necesita la ventana recortada. " + m + "Usa «Marcar la ventana a mano» o repite la captura con el borde verde de la plataforma visible.");
+  }
+  restaurarEncuadre();
+  const seg = await PodoIA.App.segmentar(frameCanvas, ponerProgresoIA);
+  $("iaEstado").textContent = "Modelo de IA listo. Escala calibrada automáticamente con el marcador de 6 cm cuando se ve en la imagen.";
+  if (!seg.instancias) throw new Error("El modelo no detectó huellas en la imagen. Prueba con el modo por umbral.");
+  let mask = seg.mask, w = frameCanvas.width, h = frameCanvas.height, esc = parseFloat($("escala").value) || PodoIA.App.CFG.escalaVentana;
+  const cal = PodoIA.App.calibrarAuto(frameCanvas);
+  if (cal.ok){
+    esc = cal.pxPorCmX;
+    const factor = cal.pxPorCmX / cal.pxPorCmY;                  // < 1: hay más píxeles por cm en vertical que en horizontal
+    if (Math.abs(factor - 1) > 0.005 && Math.abs(factor - 1) < 0.15){
+      const h2 = Math.max(2, Math.round(h * factor));
+      mask = PodoIA.App.remuestrearVertical(mask, w, h, h2);
+      const c2 = PodoIA.App.remuestrearCanvas(frameCanvas, h2);
+      frameCanvas.width = w; frameCanvas.height = h2; frameCanvas.getContext("2d").drawImage(c2, 0, 0); h = h2;
+      estado.notas.push("Se igualó la escala de los dos ejes con el marcador (diferencia de " + fmt(Math.abs(1 / factor - 1) * 100, 1) + " %).");
+    }
+    $("escala").value = esc.toFixed(2); estado.calibrada = true; estado.calibManual = false;
+    estado.notas.push("Escala calibrada con el marcador de 6 cm: " + fmt(esc, 1) + " px/cm.");
+    $("calibEstado").textContent = "Calibración automática con el marcador: " + fmt(esc, 1) + " px/cm (confianza " + Math.round(cal.confianza * 100) + " %).";
+  } else if (estado.calibManual){
+    estado.notas.push("Escala calibrada a mano: " + fmt(esc, 1) + " px/cm.");
+  } else {
+    estado.calibrada = false;
+    $("escala").value = PodoIA.App.CFG.escalaVentana.toFixed(1); esc = PodoIA.App.CFG.escalaVentana;
+    estado.notas.push("No se vio el marcador (" + (cal.motivo || "sin detalle") + "). Las medidas en cm son aproximadas; calibra con dos puntos.");
+    $("calibEstado").textContent = "Sin marcador: calibración manual recomendada.";
+  }
+  ajustarAspecto(frameCanvas.width, frameCanvas.height);
+  return { resultado: analizarLocal(esc, parseInt($("sens").value, 10), mask), esc };
+}
+function actualizarControlesIA(){
+  const ia = $("modoAnalisis").value === "ia";
+  $("sens").disabled = ia; $("sens").title = ia ? "No se usa en el modo de IA" : "";
+  $("btnCalibrar").disabled = !estado.hayCaptura;
+  $("btnRecorteManual").disabled = !estado.original;
+  const r = estado.recorteInfo;
+  $("recorteEstado").textContent = !r ? "La ventana de la plataforma se recorta sola al capturar o cargar una imagen."
+    : r.ok ? (r.manual ? "Ventana recortada con las esquinas marcadas a mano." : "Ventana recortada automáticamente (confianza " + Math.round(r.confianza * 100) + " %)." + (r.motivo ? " Aviso: " + r.motivo : ""))
+    : "No se pudo recortar sola: " + (r.motivo || "no se vio la ventana completa") + " Puedes marcarla a mano.";
+}
+$("modoAnalisis").addEventListener("change", () => {
+  actualizarControlesIA();
+  if ($("modoAnalisis").value === "ia" && window.PodoIA && PodoIA.App) PodoIA.App.asegurarModelo(ponerProgresoIA).then(() => { $("iaEstado").textContent = "Modelo de IA listo."; }).catch(e => { $("iaEstado").textContent = e.message; mostrarAviso(e.message, "error"); });
+  if (estado.hayCaptura) analizar();
+});
+let cancelarMarcado = null;
+$("btnRecorteManual").addEventListener("click", () => {
+  const btn = $("btnRecorteManual");
+  if (cancelarMarcado){ cancelarMarcado(); cancelarMarcado = null; btn.textContent = "Marcar la ventana a mano"; mostrarVista("captura"); return; }
+  if (!estado.original) return;
+  mostrarVista("captura");
+  btn.textContent = "Cancelar el marcado";
+  cancelarMarcado = PodoIA.App.marcarVentana($("lienzo"), estado.original, t => mostrarAviso(t), esquinas => {
+    cancelarMarcado = null; btn.textContent = "Marcar la ventana a mano";
+    PodoIA.App.aplicarEsquinas(estado, frameCanvas, esquinas); guardarRecortada();
+    ajustarAspecto(frameCanvas.width, frameCanvas.height); actualizarControlesIA(); analizar();
+  });
+});
+let uiCal = null;
+function cerrarCalibracion(){
+  if (uiCal){ uiCal.destruir(); uiCal = null; }
+  $("btnCalibrar").textContent = "Calibrar con dos o más puntos"; $("calibPanel").innerHTML = "";
+  mostrarVista(estado.tab === "vivo" ? "captura" : estado.tab);
+  if (estado.calibManual && estado.hayCaptura) analizar();
+}
+$("btnCalibrar").addEventListener("click", () => {
+  if (uiCal){ cerrarCalibracion(); return; }
+  if (!estado.hayCaptura || !window.PodoIA || !PodoIA.Calibracion) return;
+  mostrarVista("captura");
+  uiCal = PodoIA.Calibracion.UI.iniciar($("lienzo"), { lupa: true, distanciaCm: 6, panel: $("calibPanel"), onResultado: r => {
+    if (r && r.pxPorCm > 0){
+      $("escala").value = r.pxPorCm.toFixed(2); $("escala").dispatchEvent(new Event("input", { bubbles: true })); estado.calibManual = true;
+      $("calibEstado").textContent = "Calibración manual: " + fmt(r.pxPorCm, 2) + " px/cm" + (r.error_rel != null ? " (error estimado " + fmt(r.error_rel * 100, 1) + " %)" : "") + ".";
+    }
+  } });
+  $("btnCalibrar").textContent = "Terminar la calibración";
+  mostrarAviso("Toca dos puntos de la imagen (por ejemplo, dos esquinas del marcador de 6 cm), escribe su distancia real y confirma. Con más pares la medida es más precisa.");
+});
 $("sens").addEventListener("input", e => $("sensValor").textContent = e.target.value);
 $("escala").addEventListener("input", () => { estado.calibrada = true; });
 
