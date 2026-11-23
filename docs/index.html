@@ -578,6 +578,43 @@ function dividirPies(mask, w, h){
   return mejor ? Math.round(mejor.ini + mejor.len/2) : Math.floor(w/2);
 }
 
+// Base de los dedos = parte superior de la zona plantar (almohadilla del antepié), sin ningún dedo.
+// Idea: los dedos son más angostos que cualquier disco de ~1,5 cm de radio (≈ 6 % de la longitud de la huella),
+// mientras que el antepié, el arco y el talón sí lo contienen. Se calcula la distancia de cada píxel de la huella al
+// fondo, se conservan los píxeles que admiten ese disco (apertura morfológica) y la parte más alta de la masa grande que
+// queda (corrigiendo el radio del disco) es el borde superior del antepié. Devuelve null si no se puede decidir.
+function baseDedos(mask, w, x0, x1, minY, maxY){
+  const L = maxY - minY + 1, W = x1 - x0, Wp = W + 2, Hp = L + 2, rpx = Math.max(3, Math.round(0.06*L));
+  const d = new Int32Array(Wp*Hp);
+  for (let y = 0; y < L; y++){ const o = (minY + y)*w + x0, q = (y + 1)*Wp + 1; for (let x = 0; x < W; x++) if (mask[o+x]) d[q+x] = 1e6; }
+  for (let y = 1; y <= L; y++) for (let x = 1; x <= W; x++){        // pasada hacia adelante (chaflán 3-4)
+    const i = y*Wp + x; if (!d[i]) continue;
+    let v = d[i]; const a = d[i-1] + 3, b = d[i-Wp] + 3, c = d[i-Wp-1] + 4, e = d[i-Wp+1] + 4;
+    if (a < v) v = a; if (b < v) v = b; if (c < v) v = c; if (e < v) v = e; d[i] = v;
+  }
+  for (let y = L; y >= 1; y--) for (let x = W; x >= 1; x--){        // pasada hacia atrás
+    const i = y*Wp + x; if (!d[i]) continue;
+    let v = d[i]; const a = d[i+1] + 3, b = d[i+Wp] + 3, c = d[i+Wp+1] + 4, e = d[i+Wp-1] + 4;
+    if (a < v) v = a; if (b < v) v = b; if (c < v) v = c; if (e < v) v = e; d[i] = v;
+  }
+  const lim = 3*rpx, et = new Int32Array(Wp*Hp), pila = [], comps = [];
+  for (let i0 = 0; i0 < d.length; i0++){
+    if (d[i0] < lim || et[i0]) continue;
+    const id = comps.length + 1; let area = 0, top = Hp; et[i0] = id; pila.push(i0);
+    while (pila.length){
+      const i = pila.pop(); area++; const yy = (i / Wp) | 0; if (yy < top) top = yy;
+      for (let dy = -1; dy <= 1; dy++) for (let dx = -1; dx <= 1; dx++){
+        const j = i + dy*Wp + dx; if (j >= 0 && j < d.length && !et[j] && d[j] >= lim){ et[j] = id; pila.push(j); }
+      }
+    }
+    comps.push({ area, top });
+  }
+  if (!comps.length) return null;
+  const mayor = Math.max(...comps.map(c => c.area));
+  let top = Hp; comps.forEach(c => { if (c.area >= 0.15*mayor && c.top < top) top = c.top; });
+  return Math.max(minY, minY + (top - 1) - rpx);
+}
+
 function medirPie(mask, w, h, x0, x1, esc, fracDedos){
   const filas = new Float32Array(h);
   let minY = -1, maxY = -1, minX = w, maxX = -1, total = 0;
@@ -597,7 +634,9 @@ function medirPie(mask, w, h, x0, x1, esc, fracDedos){
     for (let j = -k; j <= k; j++){ const yy = y+j; if (yy >= 0 && yy < h){ acc += filas[yy]; n++; } }
     s[y] = acc / n;
   }
-  const yDedos = minY + Math.round(fracDedos * L);
+  // El criterio es la forma de la huella (base de los dedos); si no se puede decidir, se usa la fracción fija como respaldo.
+  let yDedos = baseDedos(mask, w, x0, x1, minY, maxY), porForma = true;
+  if (yDedos === null || yDedos < minY + 0.06*L || yDedos > minY + 0.40*L){ yDedos = minY + Math.round(fracDedos * L); porForma = false; }
   const resto = maxY - yDedos + 1;
   const t1 = yDedos + Math.round(resto/3), t2 = yDedos + Math.round(2*resto/3);
 
@@ -609,8 +648,10 @@ function medirPie(mask, w, h, x0, x1, esc, fracDedos){
   }
   if (!isFinite(mid)) mid = 0;
   const aT = aF + aM + aH;
+  let cx0 = w, cx1 = -1;
+  for (let y = yDedos; y <= maxY; y++){ const o = y*w; for (let x = x0; x < x1; x++) if (mask[o+x]){ if (x < cx0) cx0 = x; if (x > cx1) cx1 = x; } }
   return {
-    minY, maxY, minX, maxX, yDedos, t1, t2,
+    minY, maxY, minX, maxX, yDedos, t1, t2, cuerpoX0: cx0, cuerpoX1: cx1, dedosPorForma: porForma,
     longitud_cm: L/esc, antepie_cm: fore/esc, arco_cm: mid/esc, talon_cm: heel/esc,
     area_cm2: total/(esc*esc),
     csi: fore > 0 ? mid/fore*100 : 0,
@@ -966,11 +1007,12 @@ function dibujarMedidas(mask, w, h, pies){
   };
   pies.forEach(p => {
     const m = p.m; if (!m) return;
-    const x0 = m.minX - fs, x1 = m.maxX + fs, cx = (m.minX + m.maxX) / 2;
-    x.strokeStyle = "rgba(255,255,255,0.92)"; x.lineWidth = Math.max(1, w/600); x.setLineDash([6, 5]);
-    [m.yDedos, m.t1, m.t2].forEach(yy => { x.beginPath(); x.moveTo(x0, yy + 0.5); x.lineTo(x1, yy + 0.5); x.stroke(); });
-    x.setLineDash([]);
-    x.strokeRect(m.minX - 3, m.minY - 3, (m.maxX - m.minX) + 6, (m.maxY - m.minY) + 6);
+    const cx = (m.minX + m.maxX) / 2, bx0 = m.cuerpoX0, bx1 = m.cuerpoX1 + 1;
+    // Tres tercios de la huella sin dedos, todos con el ancho del cuerpo del pie
+    x.lineWidth = Math.max(2, w/450); x.setLineDash([]);
+    [[m.yDedos, m.t1, "#3b82f6"], [m.t1, m.t2, "#22c55e"], [m.t2, m.maxY + 1, "#ef4444"]].forEach(([ya, yb, col]) => {
+      x.strokeStyle = col; x.strokeRect(bx0, ya, bx1 - bx0, yb - ya);
+    });
     etiqueta("Antepié", cx, (m.yDedos + m.t1) / 2);
     etiqueta("Arco",    cx, (m.t1 + m.t2) / 2);
     etiqueta("Talón",   cx, (m.t2 + m.maxY) / 2);
@@ -1258,6 +1300,7 @@ function bloquePie(titulo, lado, m){
   return `<article class="pie">
     <header><h3>${titulo}</h3><span class="lado">${lado}</span></header>
     <span class="etiqueta c-${cl}">Clasificación orientativa: ${NOMBRE_CLASE[cl].toLowerCase()}</span>
+    <p class="indice-ref" style="margin-top:12px">Chippaux-Smirak, Staheli y Cavanagh se calculan sin los dedos (las ventanas de la pestaña Medidas empiezan donde termina la zona plantar, sin los dedos). La longitud y el área de contacto sí los incluyen.</p>
     <dl class="medidas">
       ${filaMedida("Longitud del pie", fmt(m.longitud_cm, 1), "cm")}
       ${filaMedida("Ancho del antepié", fmt(m.antepie_cm, 1), "cm")}
