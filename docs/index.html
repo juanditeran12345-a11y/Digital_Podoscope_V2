@@ -562,20 +562,23 @@ function filtrarComponentes(mask, w, h, minArea){
 }
 
 function dividirPies(mask, w, h){
+  // La separación entre los dos pies es el hueco vacío más ancho que queda ENTRE la primera y la última columna con huella.
+  // (Antes se buscaba en la franja central de la imagen, y si los pies estaban corridos hacia un lado se tomaba el espacio vacío
+  // entre el borde de la imagen y el primer pie.)
   const col = new Int32Array(w);
   for (let y = 0; y < h; y++){ const o = y*w; for (let x = 0; x < w; x++) if (mask[o+x]) col[x]++; }
-  const a = Math.floor(w*0.25), b = Math.ceil(w*0.75);
+  const ruido = 2;                                  // columnas con 2 píxeles o menos se consideran vacías
+  let a = 0, b = w - 1;
+  while (a < w && col[a] <= ruido) a++;
+  while (b > a && col[b] <= ruido) b--;
+  if (b <= a) return Math.floor(w/2);
   let mejor = null, ini = -1;
   for (let x = a; x <= b; x++){
-    const vacio = col[x] === 0;
+    const vacio = col[x] <= ruido;
     if (vacio && ini < 0) ini = x;
-    if ((!vacio || x === b) && ini >= 0){
-      const fin = vacio ? x : x-1, len = fin - ini + 1;
-      if (!mejor || len > mejor.len) mejor = { ini, len };
-      ini = -1;
-    }
+    if (!vacio && ini >= 0){ const len = x - ini; if (!mejor || len > mejor.len) mejor = { ini, len }; ini = -1; }
   }
-  return mejor ? Math.round(mejor.ini + mejor.len/2) : Math.floor(w/2);
+  return mejor ? Math.round(mejor.ini + mejor.len/2) : Math.round((a + b)/2);
 }
 
 // Base de los dedos = parte superior de la zona plantar (almohadilla del antepié), sin ningún dedo.
