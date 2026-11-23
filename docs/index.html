@@ -157,6 +157,11 @@ button,input,select,textarea{font:inherit;color:inherit}
   position:absolute; top:-4px; width:4px; height:18px; margin-left:-2px; border-radius:2px; background:var(--tinta);
   box-shadow:0 0 0 2px var(--blanco);
 }
+.hc-tira{position:relative; display:flex; height:10px; margin-top:10px; border-radius:5px; overflow:visible}
+.hc-tira i{display:block; height:100%}
+.hc-tira i:first-child{border-radius:5px 0 0 5px}
+.hc-tira i:last-child{border-radius:0 5px 5px 0}
+.hc-tira b{position:absolute; top:-4px; width:4px; height:18px; margin-left:-2px; border-radius:2px; background:var(--tinta); box-shadow:0 0 0 2px var(--blanco)}
 .tira-escala{position:relative; height:18px; margin-top:6px; font-size:12px; color:var(--apagado)}
 .tira-escala span{position:absolute; transform:translateX(-50%)}
 .tira-escala span:first-child{transform:none}
@@ -375,6 +380,7 @@ body[data-vista="cargando"] .cargando{display:flex}
       <button role="tab" id="tab-captura" data-vista="captura" aria-selected="false">Imagen capturada</button>
       <button role="tab" id="tab-seg" data-vista="seg" aria-selected="false">Segmentación</button>
       <button role="tab" id="tab-med" data-vista="med" aria-selected="false">Medidas</button>
+      <button role="tab" id="tab-hc" data-vista="hc" aria-selected="false">Hernández Corvo</button>
       <button role="tab" id="tab-mapa" data-vista="mapa" aria-selected="false">Mapa de presión</button>
     </div>
 
@@ -468,9 +474,9 @@ body[data-vista="cargando"] .cargando{display:flex}
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
 <script src="ia/recorte.js"></script>
+<script src="ia/calibracion.js?v=4"></script>
+<script src="ia/ia_modelo.js?v=4"></script>
 <script src="ia/modo_ia.js?v=4"></script>
-<script src="ia/ia_modelo.js"></script>
-<script src="ia/modo_ia.js"></script>
 <script>
 "use strict";
 
@@ -613,6 +619,86 @@ function medirPie(mask, w, h, x0, x1, esc, fracDedos){
   };
 }
 
+/* ---- Índice de Hernández Corvo ----
+   Geometría (Arcila, Cardona y Ruiz, 2019; Hernández Corvo, 1987):
+   L1 = tangente al borde interno entre la articulación del 1.er dedo (P1) y el talón; se arma el rectángulo de impresión
+   con perpendiculares (L2 punta de dedos, L3 borde externo, L4 talón); MF = distancia de L2 a L5 (perpendicular por P1);
+   L6 y L7 se ubican a 2·MF y 3·MF de la punta. x = ancho del rectángulo; y = ancho impreso sobre L6.
+   %X = (x − y)·100 / x  y se clasifica con la tabla HC_TABLA. */
+const HC_TABLA = [
+  { hasta: 35, nombre: "Pie plano",         grupo: "plano",  color: "#f4d3a6" },
+  { hasta: 40, nombre: "Pie plano normal",  grupo: "plano",  color: "#f8e4c7" },
+  { hasta: 55, nombre: "Pie normal",        grupo: "normal", color: "#bfe3cc" },
+  { hasta: 60, nombre: "Pie normal cavo",   grupo: "cavo",   color: "#ddd8f6" },
+  { hasta: 75, nombre: "Pie cavo",          grupo: "cavo",   color: "#cfc8f3" },
+  { hasta: 85, nombre: "Pie cavo fuerte",   grupo: "cavo",   color: "#b7aeea" },
+  { hasta: 100.0001, nombre: "Pie cavo extremo", grupo: "cavo", color: "#9d92e0" }
+];
+function clasificarHC(p){
+  for (let i = 0; i < HC_TABLA.length; i++) if (p < HC_TABLA[i].hasta) return HC_TABLA[i];
+  return HC_TABLA[HC_TABLA.length - 1];
+}
+
+function casco(pts){
+  pts.sort((a, b) => a[0] - b[0] || a[1] - b[1]);
+  const cr = (o, a, b) => (a[0]-o[0])*(b[1]-o[1]) - (a[1]-o[1])*(b[0]-o[0]);
+  const lo = [], up = [];
+  for (const p of pts){ while (lo.length >= 2 && cr(lo[lo.length-2], lo[lo.length-1], p) <= 0) lo.pop(); lo.push(p); }
+  for (let i = pts.length - 1; i >= 0; i--){ const p = pts[i]; while (up.length >= 2 && cr(up[up.length-2], up[up.length-1], p) <= 0) up.pop(); up.push(p); }
+  lo.pop(); up.pop(); return lo.concat(up);
+}
+
+// lado: "izq" = pie en la mitad izquierda de la imagen (su borde interno mira a la derecha); "der" = al revés.
+function medirHC(mask, w, h, x0, x1, esc, lado){
+  const med = lado === "izq" ? 1 : -1;
+  const pts = []; let cx = 0, cy = 0, n = 0, minY = h, maxY = -1;
+  for (let y = 0; y < h; y++){
+    let a = -1, b = -1; const o = y*w;
+    for (let x = x0; x < x1; x++) if (mask[o+x]){ if (a < 0) a = x; b = x; cx += x; cy += y; n++; }
+    if (a >= 0){ pts.push([a, y], [b, y]); if (y < minY) minY = y; maxY = y; }
+  }
+  if (n < 200 || maxY - minY < 40) return null;
+  cx /= n; cy /= n;
+  const L = maxY - minY + 1, yCorte = minY + 0.25*L, H = casco(pts.filter(q => q[1] >= yCorte));   // el casco se arma sin la zona de los dedos
+  // L1: arista del casco convexo del lado interno con normal hacia dentro del pie, la más larga (puente sobre el arco)
+  let mejor = null;
+  for (let i = 0; i < H.length; i++){
+    const p = H[i], q = H[(i+1) % H.length], dx = q[0]-p[0], dy = q[1]-p[1], len = Math.hypot(dx, dy);
+    if (len < 1) continue;
+    let nx = dy/len, ny = -dx/len;
+    if (nx*((p[0]+q[0])/2 - cx) + ny*((p[1]+q[1])/2 - cy) < 0){ nx = -nx; ny = -ny; }   // normal hacia afuera
+    if (nx*med > 0.5 && (!mejor || len > mejor.len)) mejor = { p, q, len };
+  }
+  if (!mejor || mejor.len < 0.3*L) return null;
+  let p1 = mejor.p, p2 = mejor.q; if (p1[1] > p2[1]){ const t = p1; p1 = p2; p2 = t; }   // p1: antepié, p2: talón
+  let ux = p2[0]-p1[0], uy = p2[1]-p1[1]; const lu = Math.hypot(ux, uy); ux /= lu; uy /= lu;
+  let nx = -uy, ny = ux; if (nx*med > 0){ nx = -nx; ny = -ny; }                      // n apunta hacia el borde externo
+  let aMin = Infinity, aMax = -Infinity, bMax = 0;
+  const proy = [];
+  for (let y = minY; y <= maxY; y++){
+    const o = y*w;
+    for (let x = x0; x < x1; x++) if (mask[o+x]){
+      const dx = x - p1[0], dy = y - p1[1], a = dx*ux + dy*uy, b = dx*nx + dy*ny;
+      if (a < aMin) aMin = a; if (a > aMax) aMax = a; if (b > bMax) bMax = b;
+      proy.push(a, b);
+    }
+  }
+  const MF = -aMin, Lr = aMax - aMin;
+  if (MF < 0.1*Lr || MF > 0.4*Lr || bMax < 10) return null;
+  const a6 = aMin + 2*MF, a7 = Math.min(aMin + 3*MF, aMax - 0.02*Lr), tol = Math.max(1.5, 0.004*Lr);
+  const ext = a0 => { let lo = Infinity, hi = -Infinity;
+    for (let i = 0; i < proy.length; i += 2) if (Math.abs(proy[i] - a0) <= tol){ const b = proy[i+1]; if (b < lo) lo = b; if (b > hi) hi = b; }
+    return hi < lo ? null : [Math.max(0, lo), hi]; };
+  const e6 = ext(a6), e7 = ext(a7);
+  if (!e6) return null;
+  const x = bMax, y = e6[1] - e6[0], pct = Math.min(100, Math.max(0, (x - y) * 100 / x)), cl = clasificarHC(pct);
+  return {
+    hc_pct: pct, hc_x_cm: x/esc, hc_y_cm: y/esc, hc_ei_cm: e6[0]/esc, hc_ta_cm: e7 ? e7[1]/esc : 0, hc_mf_cm: MF/esc,
+    hc_nombre: cl.nombre, hc_grupo: cl.grupo,
+    geom: { p1, p2, ux, uy, nx, ny, aMin, aMax, bMax, a6, a7, e6, e7 }
+  };
+}
+
 function clasificar(valor, t1, t2){
   if (valor < t1) return "cavo";
   if (valor <= t2) return "normal";
@@ -678,11 +764,10 @@ function analizarDatos(data, w, h, opt){
   let m = erosionar(dilatar(m0, w, h, r), w, h, r);
   m = filtrarComponentes(m, w, h, Math.round(0.0015 * w * h));
   const split = dividirPies(m, w, h);
-  return {
-    mask: m, gr, split,
-    izq: medirPie(m, w, h, 0, split, opt.esc, opt.fracDedos),
-    der: medirPie(m, w, h, split, w, opt.esc, opt.fracDedos)
-  };
+  const izq = medirPie(m, w, h, 0, split, opt.esc, opt.fracDedos), der = medirPie(m, w, h, split, w, opt.esc, opt.fracDedos);
+  if (izq) Object.assign(izq, medirHC(m, w, h, 0, split, opt.esc, "izq") || { hc_pct: null });
+  if (der) Object.assign(der, medirHC(m, w, h, split, w, opt.esc, "der") || { hc_pct: null });
+  return { mask: m, gr, split, izq, der };
 }
 // <</PURE>>
 
@@ -706,6 +791,7 @@ const MENSAJES = {
   captura: ["Aún no hay una captura", "Captura desde la cámara o carga una imagen para comenzar."],
   seg:     ["Aún no hay segmentación", "Se genera al analizar una imagen."],
   med:     ["Aún no hay medidas", "Se generan al analizar una imagen."],
+  hc:      ["Aún no hay análisis de Hernández Corvo", "Se genera al analizar una imagen."],
   mapa:    ["Aún no hay mapa de presión", "Se genera al analizar una imagen."]
 };
 
@@ -715,6 +801,7 @@ function fuenteDeVista(n){
   if (!estado.resultado) return null;
   if (n === "seg") return estado.resultado.seg;
   if (n === "med") return estado.resultado.med;
+  if (n === "hc") return estado.resultado.hc || estado.resultado.med;
   if (n === "mapa") return estado.resultado.heat;
   return null;
 }
@@ -892,6 +979,41 @@ function dibujarMedidas(mask, w, h, pies){
   return c;
 }
 
+function dibujarHC(mask, w, h, pies){
+  const c = document.createElement("canvas"); c.width = w; c.height = h;
+  const x = c.getContext("2d");
+  x.drawImage(frameCanvas, 0, 0);
+  x.fillStyle = "rgba(8,14,18,0.55)"; x.fillRect(0, 0, w, h);
+  const ov = x.createImageData(w, h), d = ov.data;
+  for (let i = 0; i < w*h; i++) if (mask[i]){ const o = i*4; d[o] = 64; d[o+1] = 196; d[o+2] = 210; d[o+3] = 120; }
+  const t = document.createElement("canvas"); t.width = w; t.height = h;
+  t.getContext("2d").putImageData(ov, 0, 0); x.drawImage(t, 0, 0);
+  const fs = Math.max(11, Math.round(w/75)), lw = Math.max(1.5, w/450);
+  x.font = `500 ${fs}px "IBM Plex Sans", sans-serif`; x.textAlign = "center"; x.textBaseline = "middle";
+  const etiqueta = (txt, px, py, col) => { x.lineWidth = 3; x.strokeStyle = "rgba(8,14,18,0.9)"; x.strokeText(txt, px, py); x.fillStyle = col || "#fff"; x.fillText(txt, px, py); };
+  pies.forEach(p => {
+    const m = p.m, g = m && m.geom; if (!g) return;
+    const P = (a, b) => [g.p1[0] + a*g.ux + b*g.nx, g.p1[1] + a*g.uy + b*g.ny];
+    const lin = (A, B, col, ancho, dash) => { x.beginPath(); x.moveTo(A[0], A[1]); x.lineTo(B[0], B[1]); x.strokeStyle = col; x.lineWidth = ancho; x.setLineDash(dash || []); x.stroke(); x.setLineDash([]); };
+    const ext = 0.03*(g.aMax - g.aMin);
+    lin(P(g.aMin - ext, 0), P(g.aMax + ext, 0), "#ffd23f", lw*1.4);                                  // L1
+    [[g.aMin, 0, g.aMin, g.bMax], [g.aMax, 0, g.aMax, g.bMax], [g.aMin, g.bMax, g.aMax, g.bMax]]      // L2, L4, L3
+      .forEach(([a0, b0, a1, b1]) => lin(P(a0, b0), P(a1, b1), "rgba(255,255,255,0.9)", lw, [7, 5]));
+    lin(P(0, 0), P(0, g.bMax), "#7df9ff", lw*1.2);                                                     // L5 = x
+    lin(P(g.a6, 0), P(g.a6, g.bMax), "rgba(255,255,255,0.75)", lw, [4, 4]);                            // L6
+    if (g.e7) lin(P(g.a7, 0), P(g.a7, g.bMax), "rgba(255,255,255,0.75)", lw, [4, 4]);                  // L7
+    lin(P(g.a6, g.e6[0]), P(g.a6, g.e6[1]), "#ff4fd8", lw*2.4);                                        // y impresa sobre L6
+    [g.p1, g.p2].forEach(q => { x.beginPath(); x.arc(q[0], q[1], lw*2.2, 0, 7); x.fillStyle = "#ffd23f"; x.fill(); });
+    const lado = p.xa === 0 ? -1 : 1, cx = (m.minX + m.maxX) / 2, y0 = Math.max(fs + 2, m.minY - fs*2.4);
+    etiqueta(p.nombre, cx, y0 - fs*1.2);
+    if (m.hc_pct != null) etiqueta("%X = " + fmt(m.hc_pct, 1) + " · " + m.hc_nombre, cx, y0);
+    const q6 = P(g.a6, g.bMax); etiqueta("y", ...P(g.a6, (g.e6[0] + g.e6[1]) / 2 + fs*0.0), "#ff9ee9");
+    etiqueta("x", ...P(0, g.bMax*0.5), "#7df9ff");
+    etiqueta("L1", ...P(g.aMax*0.55 + g.aMin*0.45, -fs*0.9), "#ffd23f");
+  });
+  return c;
+}
+
 function dibujarMapa(mask, gr, w, h){
   const I = mapaIntensidad(mask, gr, w, h);
   const c = document.createElement("canvas"); c.width = w; c.height = h;
@@ -948,6 +1070,7 @@ function analizarLocal(esc, umbral, mascaraExt){
     pies: { derecho: izqEsDer ? r.izq : r.der, izquierdo: izqEsDer ? r.der : r.izq },
     seg: dibujarMascaraRecortada(lisa, w, h, pies),
     med: dibujarMedidas(r.mask, w, h, pies),
+    hc: dibujarHC(r.mask, w, h, pies),
     heat: dibujarMapa(r.mask, r.gr, w, h)
   };
 }
@@ -962,7 +1085,7 @@ async function analizarServidor(esc){
     const im = new Image(); im.onload = () => { const c = document.createElement("canvas"); c.width = im.width; c.height = im.height; c.getContext("2d").drawImage(im, 0, 0); ok(c); }; im.onerror = mal; im.src = url;
   });
   const seg = await cargar(j.mascara);
-  return { pies: { derecho: j.derecho, izquierdo: j.izquierdo }, seg, med: seg, heat: await cargar(j.mapa) };
+  return { pies: { derecho: j.derecho, izquierdo: j.izquierdo }, seg, med: seg, hc: seg, heat: await cargar(j.mapa) };
 }
 
 async function analizar(){
@@ -1108,6 +1231,19 @@ function tira(def, val){
 }
 function filaMedida(n, v, u){ return `<div class="medida"><dt>${n}</dt><dd>${v}<span>${u}</span></dd></div>`; }
 
+function bloqueHC(m){
+  if (m.hc_pct == null) return `<div class="indice"><div class="indice-cab"><h4>Índice de Hernández Corvo</h4><span class="indice-valor">—</span></div><p class="indice-ref">No se pudo trazar la geometría en esta huella (borde interno o proporciones no detectables).</p></div>`;
+  let ini = 0;
+  const segs = HC_TABLA.map(t => { const fin = Math.min(100, t.hasta), a = fin - ini; ini = fin; return `<i style="width:${a}%;background:${t.color}"></i>`; }).join("");
+  const marcas = [0, 35, 40, 55, 60, 75, 85, 100].map(v => `<span style="left:${v}%">${v}</span>`).join("");
+  return `<div class="indice">
+    <div class="indice-cab"><h4>Índice de Hernández Corvo (%X)</h4><span class="indice-valor">${fmt(m.hc_pct, 1)}<small>%</small></span></div>
+    <div class="hc-tira" role="img" aria-label="%X ${fmt(m.hc_pct, 1)} sobre la escala de Hernández Corvo">${segs}<b style="left:${Math.min(100, m.hc_pct)}%"></b></div>
+    <div class="tira-escala">${marcas}</div>
+    <p class="indice-ref"><span class="etiqueta c-${m.hc_grupo}" style="margin:0;padding:1px 9px">${m.hc_nombre}</span> x = ${fmt(m.hc_x_cm, 1)} cm · y = ${fmt(m.hc_y_cm, 1)} cm · %X = (x − y)·100/x</p>
+  </div>`;
+}
+
 function bloquePie(titulo, lado, m){
   if (!m) return `<article class="pie"><header><h3>${titulo}</h3><span class="lado">${lado}</span></header><p class="sin-pie">No se detectó la huella de este pie. Ajusta la sensibilidad o repite la captura.</p></article>`;
   const cl = clasificacionPie(m);
@@ -1130,6 +1266,7 @@ function bloquePie(titulo, lado, m){
       ${filaMedida("Área de contacto", fmt(m.area_cm2, 1), "cm²")}
     </dl>
     ${indices}
+    ${bloqueHC(m)}
   </article>`;
 }
 
@@ -1151,10 +1288,10 @@ function mostrarResultados(){
 }
 
 /* ---- Informe PDF ---- */
-const CLAVES_PIE = ["longitud_cm", "antepie_cm", "arco_cm", "talon_cm", "area_cm2", "csi", "staheli", "indice_arco"];
+const CLAVES_PIE = ["longitud_cm", "antepie_cm", "arco_cm", "talon_cm", "area_cm2", "csi", "staheli", "indice_arco", "hc_pct", "hc_x_cm", "hc_y_cm"];
 function limpiarPie(m){
   if (!m) return null;
-  const o = {}; CLAVES_PIE.forEach(k => { const v = Number(m[k]); o[k] = isFinite(v) ? v : 0; }); return o;
+  const o = {}; CLAVES_PIE.forEach(k => { const v = Number(m[k]); if (m[k] == null && k.startsWith("hc_")) return; o[k] = isFinite(v) ? v : 0; }); return o;
 }
 function aImagen(canvas, maxAncho, calidad){
   let c = canvas;
@@ -1234,14 +1371,15 @@ function generarPDF(d){
   ["Parámetro", "Pie derecho", "Pie izquierdo", "Referencia"].forEach((t, i) => doc.text(t, cols[i], y));
   y += 7;
   const dr = d.pies.derecho, iz = d.pies.izquierdo;
-  const g = (m, k, dec) => m ? fmt(m[k], dec) : "Sin dato";
+  const g = (m, k, dec) => (m && m[k] != null && isFinite(Number(m[k]))) ? fmt(m[k], dec) : "Sin dato";
   const filas = [
     ["Longitud del pie (cm)", g(dr, "longitud_cm", 1), g(iz, "longitud_cm", 1), ""],
     ["Ancho del antepié (cm)", g(dr, "antepie_cm", 1), g(iz, "antepie_cm", 1), ""],
     ["Ancho del arco (cm)", g(dr, "arco_cm", 1), g(iz, "arco_cm", 1), ""],
     ["Ancho del talón (cm)", g(dr, "talon_cm", 1), g(iz, "talon_cm", 1), ""],
     ["Área de contacto (cm²)", g(dr, "area_cm2", 1), g(iz, "area_cm2", 1), ""],
-    ...INDICES.map(def => [def.nombre + (def.unidad ? " (" + def.unidad + ")" : ""), g(dr, def.id, def.dec), g(iz, def.id, def.dec), def.ref])
+    ...INDICES.map(def => [def.nombre + (def.unidad ? " (" + def.unidad + ")" : ""), g(dr, def.id, def.dec), g(iz, def.id, def.dec), def.ref]),
+    ["Hernández Corvo (%X)", g(dr, "hc_pct", 1), g(iz, "hc_pct", 1), "Normal de 40 a 54,9 %"]
   ];
   doc.setFont("helvetica", "normal"); doc.setFontSize(9.5); doc.setTextColor(23, 38, 45);
   filas.forEach(f => {
@@ -1253,7 +1391,8 @@ function generarPDF(d){
   const colorClase = { cavo: [91, 75, 183], normal: [46, 125, 79], plano: [184, 106, 18] };
   [["Pie derecho", dr], ["Pie izquierdo", iz]].forEach(([n, m]) => {
     doc.setFont("helvetica", "bold"); doc.setFontSize(10); doc.setTextColor(23, 38, 45); doc.text(n + ":", M, y);
-    if (m){ const c = clasificacionPie(m); doc.setTextColor(...colorClase[c]); doc.text(NOMBRE_CLASE[c] + " (orientativo)", M + 28, y); }
+    if (m){ const c = clasificacionPie(m); doc.setTextColor(...colorClase[c]); doc.text(NOMBRE_CLASE[c] + " (orientativo)", M + 28, y);
+      if (m.hc_pct != null && isFinite(Number(m.hc_pct))){ doc.setFont("helvetica", "normal"); doc.setFontSize(9); doc.setTextColor(91, 111, 121); doc.text("Hernández Corvo: " + clasificarHC(Number(m.hc_pct)).nombre.toLowerCase(), M + 90, y); } }
     else { doc.setTextColor(91, 111, 121); doc.text("Sin dato", M + 28, y); }
     y += 6;
   });
