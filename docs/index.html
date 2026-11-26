@@ -135,6 +135,8 @@ button,input,select,textarea{font:inherit;color:inherit}
 .c-cavo{color:var(--cavo); background:var(--cavo-suave)}
 .c-normal{color:var(--normal); background:var(--normal-suave)}
 .c-plano{color:var(--plano); background:var(--plano-suave)}
+.c-limite{color:#5b6f79; background:#e8eef1}
+.s-limite{background:#cbd5db}
 .medidas{margin:14px 0 0; padding:0; border-top:1px solid var(--regla)}
 .medida{display:flex; justify-content:space-between; gap:12px; padding:7px 0; border-bottom:1px solid var(--regla)}
 .medida dt{color:var(--apagado)}
@@ -490,11 +492,15 @@ const CONFIG = {
 };
 
 const INDICES = [
+  // Referencias para adultos: CSI (Paecharoen et al., 2023: cavo ≤24, normal 25–45, plano ≥46 %),
+  // Staheli (misma fuente: cavo ≤0,4, normal 0,5–0,7, plano ≥0,8; los valores intermedios son limítrofes),
+  // Cavanagh (Cavanagh y Rodgers, 1987: alto <0,21, normal 0,21–0,26, bajo >0,26).
   { id: "csi",         nombre: "Índice de Chippaux Smirak",  unidad: "%", dec: 1, t1: 25,   t2: 45,   min: 0, max: 80,  ref: "Normal de 25 a 45 %" },
-  { id: "staheli",     nombre: "Índice de Staheli",          unidad: "",  dec: 2, t1: 0.5,  t2: 0.7,  min: 0, max: 1.2, ref: "Normal de 0,50 a 0,70" },
+  { id: "staheli",     nombre: "Índice de Staheli",          unidad: "",  dec: 2, t1: 0.5,  t2: 0.7,  lim: [0.4, 0.8], min: 0, max: 1.2, ref: "Normal de 0,50 a 0,70 (cavo ≤ 0,40; plano ≥ 0,80)" },
   { id: "indice_arco", nombre: "Índice de arco de Cavanagh", unidad: "",  dec: 2, t1: 0.21, t2: 0.26, min: 0, max: 0.5, ref: "Normal de 0,21 a 0,26" }
 ];
-const NOMBRE_CLASE = { cavo: "Pie cavo", normal: "Pie normal", plano: "Pie plano" };
+const NOMBRE_CLASE = { cavo: "Pie cavo", normal: "Pie normal", plano: "Pie plano", limite: "Limítrofe" };
+const NOTA_REFERENCIAS = "Rangos de referencia para adultos: Chippaux-Smirak y Staheli según Paecharoen et al. (2023) y Cavanagh según Cavanagh y Rodgers (1987). En niños el arco cambia con la edad y estos rangos no aplican. Los valores de Staheli entre 0,40 y 0,50 y entre 0,70 y 0,80 son limítrofes y no votan en la clasificación.";
 
 /* ====================== Procesamiento (sin DOM) ====================== */
 // <<PURE>>
@@ -743,7 +749,14 @@ function medirHC(mask, w, h, x0, x1, esc, lado){
   };
 }
 
-function clasificar(valor, t1, t2){
+function clasificar(valor, t1, t2, lim){
+  if (lim){
+    if (valor <= lim[0]) return "cavo";
+    if (valor < t1) return "limite";
+    if (valor <= t2) return "normal";
+    if (valor < lim[1]) return "limite";
+    return "plano";
+  }
   if (valor < t1) return "cavo";
   if (valor <= t2) return "normal";
   return "plano";
@@ -751,7 +764,7 @@ function clasificar(valor, t1, t2){
 
 function clasificacionPie(m){
   const votos = { cavo: 0, normal: 0, plano: 0 };
-  INDICES.forEach(d => votos[clasificar(m[d.id], d.t1, d.t2)]++);
+  INDICES.forEach(d => { const c = clasificar(m[d.id], d.t1, d.t2, d.lim); if (c !== "limite") votos[c]++; });
   const orden = Object.keys(votos).sort((a, b) => votos[b] - votos[a]);
   if (votos[orden[0]] === votos[orden[1]]) return clasificar(m.csi, 25, 45);
   return orden[0];
@@ -1269,10 +1282,19 @@ $("escala").addEventListener("input", () => { estado.calibrada = true; });
 function tira(def, val){
   const span = def.max - def.min, p = v => Math.min(100, Math.max(0, (v - def.min) / span * 100));
   const a = p(def.t1), b = p(def.t2), m = p(val);
+  let zonas, marcas;
+  if (def.lim){
+    const l0 = p(def.lim[0]), l1 = p(def.lim[1]);
+    zonas = `<i class="s-cavo" style="width:${l0}%"></i><i class="s-limite" style="width:${a - l0}%"></i><i class="s-normal" style="width:${b - a}%"></i><i class="s-limite" style="width:${l1 - b}%"></i><i class="s-plano" style="width:${100 - l1}%"></i>`;
+    marcas = [[0, def.min], [l0, def.lim[0]], [a, def.t1], [b, def.t2], [l1, def.lim[1]], [100, def.max]];
+  } else {
+    zonas = `<i class="s-cavo" style="width:${a}%"></i><i class="s-normal" style="width:${b - a}%"></i><i class="s-plano" style="width:${100 - b}%"></i>`;
+    marcas = [[0, def.min], [a, def.t1], [b, def.t2], [100, def.max]];
+  }
   return `<div class="tira" role="img" aria-label="Valor ${fmt(val, def.dec)} sobre la escala de referencia">
-      <i class="s-cavo" style="width:${a}%"></i><i class="s-normal" style="width:${b - a}%"></i><i class="s-plano" style="width:${100 - b}%"></i><b style="left:${m}%"></b>
+      ${zonas}<b style="left:${m}%"></b>
     </div>
-    <div class="tira-escala"><span style="left:0">${fmt(def.min, def.dec)}</span><span style="left:${a}%">${fmt(def.t1, def.dec)}</span><span style="left:${b}%">${fmt(def.t2, def.dec)}</span><span style="left:100%">${fmt(def.max, def.dec)}</span></div>`;
+    <div class="tira-escala">${marcas.map(([pos, v]) => `<span style="left:${pos}%">${fmt(v, def.dec)}</span>`).join("")}</div>`;
 }
 function filaMedida(n, v, u){ return `<div class="medida"><dt>${n}</dt><dd>${v}<span>${u}</span></dd></div>`; }
 
@@ -1293,7 +1315,7 @@ function bloquePie(titulo, lado, m){
   if (!m) return `<article class="pie"><header><h3>${titulo}</h3><span class="lado">${lado}</span></header><p class="sin-pie">No se detectó la huella de este pie. Ajusta la sensibilidad o repite la captura.</p></article>`;
   const cl = clasificacionPie(m);
   const indices = INDICES.map(d => {
-    const v = m[d.id], c = clasificar(v, d.t1, d.t2);
+    const v = m[d.id], c = clasificar(v, d.t1, d.t2, d.lim);
     return `<div class="indice">
       <div class="indice-cab"><h4>${d.nombre}</h4><span class="indice-valor">${fmt(v, d.dec)}<small>${d.unidad}</small></span></div>
       ${tira(d, v)}
@@ -1304,6 +1326,7 @@ function bloquePie(titulo, lado, m){
     <header><h3>${titulo}</h3><span class="lado">${lado}</span></header>
     <span class="etiqueta c-${cl}">Clasificación orientativa: ${NOMBRE_CLASE[cl].toLowerCase()}</span>
     <p class="indice-ref" style="margin-top:12px">Chippaux-Smirak, Staheli y Cavanagh se calculan sin los dedos (las ventanas de la pestaña Medidas empiezan donde termina la zona plantar, sin los dedos). La longitud y el área de contacto sí los incluyen.</p>
+    <p class="indice-ref">${NOTA_REFERENCIAS}</p>
     <dl class="medidas">
       ${filaMedida("Longitud del pie", fmt(m.longitud_cm, 1), "cm")}
       ${filaMedida("Ancho del antepié", fmt(m.antepie_cm, 1), "cm")}
@@ -1353,7 +1376,7 @@ function capturarInforme(maxAncho, calidad){
   const r = estado.resultado;
   if (!r) return null;
   const val = id => ($(id).value || "").trim();
-  const imgs = [[frameCanvas, "Imagen capturada"], [r.seg, "Segmentación"], [r.med, "Medidas"], [r.heat, "Mapa de presión"]];
+  const imgs = [[frameCanvas, "Imagen capturada"], [r.seg, "Segmentación"], [r.med, "Medidas"], [r.hc || r.med, "Hernández Corvo"], [r.heat, "Mapa de presión"]];
   return {
     fecha: new Date().toISOString(),
     paciente: {
@@ -1398,17 +1421,21 @@ function generarPDF(d){
   par(M, "Profesional", val(P.profesional, "No registrado")); y += 10;
 
   titulo("Imágenes del examen");
-  const gap = 4, iw = (W - 2*M - 3*gap) / 4, hMax = 46;
+  const gap = 4, porFila = 3, iw = (W - 2*M - (porFila - 1)*gap) / porFila, hMax = 46;
   const imgs = d.imagenes || [];
   const medidas = imgs.map(im => { const e = Math.min(iw / im.w, hMax / im.h); return [im.w * e, im.h * e]; });
-  const altoFila = Math.max(1, ...medidas.map(m => m[1]));
-  imgs.forEach((im, i) => {
-    const x = M + i * (iw + gap);
-    doc.addImage(im.url, "JPEG", x, y, medidas[i][0], medidas[i][1]);
-    doc.setFontSize(8); doc.setFont("helvetica", "normal"); doc.setTextColor(91, 111, 121);
-    doc.text(im.leyenda, x, y + altoFila + 4.5);
-  });
-  y += altoFila + 12;
+  for (let ini = 0; ini < imgs.length; ini += porFila){
+    const fila = imgs.slice(ini, ini + porFila);
+    const altoFila = Math.max(1, ...fila.map((_, k) => medidas[ini + k][1]));
+    fila.forEach((im, k) => {
+      const x = M + k * (iw + gap);
+      doc.addImage(im.url, "JPEG", x, y, medidas[ini + k][0], medidas[ini + k][1]);
+      doc.setFontSize(8); doc.setFont("helvetica", "normal"); doc.setTextColor(91, 111, 121);
+      doc.text(im.leyenda, x, y + altoFila + 4.5);
+    });
+    y += altoFila + 11;
+  }
+  doc.addPage(); y = 20;
 
   titulo("Resultados");
   const cols = [M, 82, 112, 142];
@@ -1434,7 +1461,7 @@ function generarPDF(d){
   });
   y += 3;
 
-  const colorClase = { cavo: [91, 75, 183], normal: [46, 125, 79], plano: [184, 106, 18] };
+  const colorClase = { cavo: [91, 75, 183], normal: [46, 125, 79], plano: [184, 106, 18], limite: [91, 111, 121] };
   [["Pie derecho", dr], ["Pie izquierdo", iz]].forEach(([n, m]) => {
     doc.setFont("helvetica", "bold"); doc.setFontSize(10); doc.setTextColor(23, 38, 45); doc.text(n + ":", M, y);
     if (m){ const c = clasificacionPie(m); doc.setTextColor(...colorClase[c]); doc.text(NOMBRE_CLASE[c] + " (orientativo)", M + 28, y);
@@ -1454,8 +1481,9 @@ function generarPDF(d){
   doc.setFontSize(8); doc.setTextColor(91, 111, 121);
   const pie = [];
   if (!d.calibrada) pie.push("La escala no estaba calibrada, por lo que las medidas en centímetros son referenciales.");
+  pie.push("Rangos para adultos (Paecharoen et al., 2023; Cavanagh y Rodgers, 1987); en niños no aplican. Staheli entre 0,40-0,50 y 0,70-0,80 es limítrofe y no vota.");
   pie.push("Este informe es una herramienta de apoyo calculada a partir de la huella plantar. Los índices y umbrales son de referencia y no sustituyen la valoración clínica del profesional.");
-  doc.text(doc.splitTextToSize(pie.join(" "), W - 2*M), M, 280);
+  doc.text(doc.splitTextToSize(pie.join(" "), W - 2*M), M, 276);
 
   doc.save("informe_podoscopico_" + val(P.nombre, "paciente").toLowerCase().replace(/[^a-z0-9]+/g, "_") + ".pdf");
   return true;
