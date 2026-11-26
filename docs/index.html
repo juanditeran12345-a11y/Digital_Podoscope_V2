@@ -496,7 +496,7 @@ const INDICES = [
   // Staheli (misma fuente: cavo ≤0,4, normal 0,5–0,7, plano ≥0,8; los valores intermedios son limítrofes),
   // Cavanagh (Cavanagh y Rodgers, 1987: alto <0,21, normal 0,21–0,26, bajo >0,26).
   { id: "csi",         nombre: "Índice de Chippaux Smirak",  unidad: "%", dec: 1, t1: 25,   t2: 45,   min: 0, max: 80,  ref: "Normal de 25 a 45 %" },
-  { id: "staheli",     nombre: "Índice de Staheli",          unidad: "",  dec: 2, t1: 0.5,  t2: 0.7,  lim: [0.4, 0.8], min: 0, max: 1.2, ref: "Normal de 0,50 a 0,70 (cavo ≤ 0,40; plano ≥ 0,80)" },
+  { id: "staheli",     nombre: "Índice de Staheli",          unidad: "",  dec: 2, t1: 0.5,  t2: 0.7,  lim: [0.4, 0.8], min: 0, max: 1.2, ref: "Normal de 0,50 a 0,70 (cavo ≤ 0,40; plano ≥ 0,80)", refPdf: "Normal de 0,50 a 0,70" },
   { id: "indice_arco", nombre: "Índice de arco de Cavanagh", unidad: "",  dec: 2, t1: 0.21, t2: 0.26, min: 0, max: 0.5, ref: "Normal de 0,21 a 0,26" }
 ];
 const NOMBRE_CLASE = { cavo: "Pie cavo", normal: "Pie normal", plano: "Pie plano", limite: "Limítrofe" };
@@ -1451,7 +1451,7 @@ function generarPDF(d){
     ["Ancho del arco (cm)", g(dr, "arco_cm", 1), g(iz, "arco_cm", 1), ""],
     ["Ancho del talón (cm)", g(dr, "talon_cm", 1), g(iz, "talon_cm", 1), ""],
     ["Área de contacto (cm²)", g(dr, "area_cm2", 1), g(iz, "area_cm2", 1), ""],
-    ...INDICES.map(def => [def.nombre + (def.unidad ? " (" + def.unidad + ")" : ""), g(dr, def.id, def.dec), g(iz, def.id, def.dec), def.ref]),
+    ...INDICES.map(def => [def.nombre + (def.unidad ? " (" + def.unidad + ")" : ""), g(dr, def.id, def.dec), g(iz, def.id, def.dec), def.refPdf || def.ref]),
     ["Hernández Corvo (%X)", g(dr, "hc_pct", 1), g(iz, "hc_pct", 1), "Normal de 40 a 54,9 %"]
   ];
   doc.setFont("helvetica", "normal"); doc.setFontSize(9.5); doc.setTextColor(23, 38, 45);
